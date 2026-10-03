@@ -47,15 +47,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
   const cartCount = useAppSelector((state) => state.cart.items.reduce((sum, item) => sum + item.quantite, 0));
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!user && typeof window !== "undefined" && localStorage.getItem("token")) {
+    if (user) return;
+    if (typeof window !== "undefined" && localStorage.getItem("token")) {
       dispatch(fetchMe());
+    } else {
+      // Pas (ou plus) de session : retour à la connexion, puis ici après login.
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
-  }, [user, dispatch]);
+  }, [user, token, pathname, dispatch, router]);
 
   useEffect(() => {
     if (!user) return;

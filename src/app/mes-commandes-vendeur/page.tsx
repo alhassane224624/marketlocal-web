@@ -13,6 +13,7 @@ interface ShopOrder {
   items: {
     id: number;
     quantite: number;
+    statut: string;
     prix_unitaire: string;
     product: { nom: string };
   }[];
@@ -42,11 +43,26 @@ const filters = [
   { key: "en_attente", label: "En attente" },
 ];
 
+// Ordre d'avancement : dans une commande multi-vendeurs, le statut global peut
+// différer de celui des articles de ma boutique (seuls renvoyés par /shop/orders).
+const progression = ["en_attente", "payee", "expediee", "livree"];
+
+// Statut des articles de ma boutique : le moins avancé d'entre eux.
+const shopStatut = (o: ShopOrder) => {
+  const statuts = o.items.map((i) => i.statut).filter(Boolean);
+  if (statuts.length === 0) return o.statut;
+  if (statuts.every((s) => s === "annulee")) return "annulee";
+  return statuts
+    .filter((s) => s !== "annulee")
+    .reduce((min, s) => (progression.indexOf(s) < progression.indexOf(min) ? s : min));
+};
+
 export default function MesCommandesVendeurPage() {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = () =>
     api
@@ -60,15 +76,19 @@ export default function MesCommandesVendeurPage() {
 
   const updateStatus = async (id: number, statut: string) => {
     setUpdatingId(id);
+    setError(null);
     try {
       await api.put(`/orders/${id}/statut`, { statut });
       await load();
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setError(message || "Erreur lors de la mise à jour du statut.");
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const filtered = filter ? orders.filter((o) => o.statut === filter) : orders;
+  const filtered = filter ? orders.filter((o) => shopStatut(o) === filter) : orders;
 
   const totalOf = (o: ShopOrder) =>
     o.items.reduce((sum, i) => sum + parseFloat(i.prix_unitaire) * i.quantite, 0);
@@ -93,6 +113,10 @@ export default function MesCommandesVendeurPage() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</div>
+      )}
 
       {loading && <p className="text-gray-500 text-center py-12">Chargement...</p>}
 
@@ -136,12 +160,12 @@ export default function MesCommandesVendeurPage() {
                     {totalOf(order).toFixed(2)} MAD
                   </td>
                   <td className="px-5 py-3">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statutColors[order.statut]}`}>
-                      {statutLabels[order.statut]}
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statutColors[shopStatut(order)]}`}>
+                      {statutLabels[shopStatut(order)]}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {order.statut === "payee" && (
+                    {shopStatut(order) === "payee" && (
                       <button
                         onClick={() => updateStatus(order.id, "expediee")}
                         disabled={updatingId === order.id}
@@ -150,7 +174,7 @@ export default function MesCommandesVendeurPage() {
                         Marquer expédiée
                       </button>
                     )}
-                    {order.statut === "expediee" && (
+                    {shopStatut(order) === "expediee" && (
                       <button
                         onClick={() => updateStatus(order.id, "livree")}
                         disabled={updatingId === order.id}

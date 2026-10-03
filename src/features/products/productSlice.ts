@@ -10,7 +10,7 @@ export interface Product {
   image: string | null;
   shop: { id: number; nom: string };
   category: { id: number; nom: string };
-  reviews?: { id: number; note: number; commentaire: string | null }[];
+  reviews?: { id: number; note: number; commentaire: string | null; user?: { id: number; name: string } }[];
 }
 
 interface ProductsState {
