@@ -66,7 +66,7 @@ MarketLocal/
 - Paiement : Stripe + Stripe Connect Express
 - Images : Cloudinary (fallback local configurable)
 - Tests : Pest / PHPUnit
-- Déploiement cible : Railway ou Render + Vercel
+- Déploiement : Vercel (frontend) + Render (API) + Aiven (MySQL), offres gratuites
 
 ## Installation backend
 
@@ -197,15 +197,19 @@ Admin
 
 ## Déploiement
 
-Frontend : Vercel.
+| Partie | Service gratuit |
+|---|---|
+| Frontend Next.js | Vercel (Hobby) |
+| API Laravel | Render (Free, Docker) |
+| Base MySQL | Aiven (Free) |
+| Images | Cloudinary (Free) |
+| Paiement | Stripe en mode test |
 
-Backend : Railway ou Render.
+Variables Vercel : `NEXT_PUBLIC_API_URL` (URL Render + `/api`) et `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
 
-Base : MySQL managé.
+Le guide pas à pas est dans `DEPLOIEMENT.md` du dépôt backend.
 
-Images : Cloudinary.
-
-Stripe : mode test pour la démonstration portfolio.
+> L'API est hébergée sur l'offre gratuite de Render : après une période d'inactivité, le premier chargement peut prendre 30 à 50 secondes.
 
 ## Après récupération du projet
 
