@@ -1,17 +1,119 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowRight, BriefcaseBusiness, Check, Leaf, Mail, UserRound } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, Check, ShoppingBag, Store } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { register } from "@/features/auth/authSlice";
-import { Logo } from "@/components/MarketLocalUI";
+import AuthLayout from "@/components/AuthLayout";
+import { Alert, Button, cn, Field, Input } from "@/components/ui";
+
+const roles = [
+  { value: "acheteur", label: "Je veux acheter", text: "Découvrir et commander des produits locaux", icon: ShoppingBag },
+  { value: "vendeur", label: "Je veux vendre", text: "Ouvrir ma boutique et publier mes produits", icon: Store },
+] as const;
 
 export default function RegisterPage() {
-  const dispatch = useAppDispatch(); const router = useRouter(); const { status, error } = useAppSelector((s) => s.auth); const [form, setForm] = useState({ name: "", email: "", password: "", password_confirmation: "", role: "acheteur" });
-  const submit = async (e: React.FormEvent) => { e.preventDefault(); const r = await dispatch(register(form)); if (register.fulfilled.match(r)) router.push("/dashboard"); };
-  return <div className="min-h-screen bg-[#f7faf8]"><div className="mx-auto grid min-h-screen max-w-[1200px] items-center gap-10 px-4 py-8 lg:grid-cols-2 lg:px-8"><div className="hidden lg:block"><Logo /><div className="mt-16 max-w-lg"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green-600">Rejoignez-nous</p><h1 className="mt-3 text-5xl font-black leading-tight tracking-tight text-slate-900">Une communauté qui valorise le <span className="text-green-600">local.</span></h1><p className="mt-5 text-sm leading-6 text-slate-500">Achetez auprès de vendeurs passionnés ou ouvrez votre propre boutique sur MarketLocal.</p><div className="mt-8 grid grid-cols-2 gap-3"><Benefit text="Catalogue local" /><Benefit text="Paiement sécurisé" /><Benefit text="Suivi des commandes" /><Benefit text="Espace vendeur" /></div></div></div><div className="mx-auto w-full max-w-md"><div className="mb-7 lg:hidden"><Logo /></div><div className="mb-7"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green-600">Créer votre compte</p><h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">Bienvenue sur MarketLocal</h2><p className="mt-2 text-sm text-slate-500">Quelques informations suffisent pour commencer.</p></div><form onSubmit={submit} className="space-y-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-[0_15px_50px_rgba(15,23,42,.06)] sm:p-8"><Field label="Nom complet" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Votre nom" icon={<UserRound size={15} />} /><Field label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="vous@exemple.com" type="email" icon={<Mail size={15} />} /><div className="grid gap-3 sm:grid-cols-2"><Field label="Mot de passe" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="8 caractères minimum" type="password" /><Field label="Confirmation" value={form.password_confirmation} onChange={(v) => setForm({ ...form, password_confirmation: v })} placeholder="Répétez le mot de passe" type="password" /></div><div><p className="mb-2 text-xs font-bold text-slate-600">Je souhaite...</p><div className="grid grid-cols-2 gap-2">{[["acheteur","Acheter",UserRound],["vendeur","Vendre",BriefcaseBusiness]].map(([value,label,Icon]: any) => <button type="button" key={value} onClick={() => setForm({ ...form, role: value })} className={`rounded-xl border p-3 text-left ${form.role === value ? "border-green-300 bg-green-50" : "border-slate-200"}`}><Icon size={16} className={form.role === value ? "text-green-600" : "text-slate-400"} /><p className="mt-2 text-xs font-bold">{label}</p><p className="text-[10px] text-slate-400">{value === "vendeur" ? "Créer une boutique" : "Acheter local"}</p></button>)}</div></div>{error && <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{typeof error === "string" ? error : "Vérifiez les informations saisies."}</div>}<button disabled={status === "loading"} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-600 text-xs font-extrabold text-white hover:bg-green-700 disabled:bg-slate-200">{status === "loading" ? "Création..." : "Créer mon compte"}<ArrowRight size={15} /></button></form><p className="mt-5 text-center text-xs text-slate-500">Déjà un compte ? <Link href="/login" className="font-bold text-green-600">Se connecter</Link></p></div></div></div>;
+  return (
+    <AuthLayout>
+      <Suspense fallback={null}>
+        <RegisterForm />
+      </Suspense>
+    </AuthLayout>
+  );
 }
-function Field({ icon, label, value, onChange, type = "text", placeholder }: { icon?: React.ReactNode; label: string; value: string; onChange: (v: string) => void; type?: string; placeholder: string }) { return <label className="block text-xs font-bold text-slate-600">{label}<span className="relative mt-1 block"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon}</span><input required type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`h-11 w-full rounded-xl border border-slate-200 ${icon ? "pl-9" : "px-3"} pr-3 text-xs font-normal outline-none focus:border-green-300 focus:ring-4 focus:ring-green-50`} /></span></label>; }
-function Benefit({ text }: { text: string }) { return <div className="flex items-center gap-2 rounded-xl bg-white p-3 text-xs font-bold text-slate-600 shadow-sm ring-1 ring-slate-100"><span className="grid h-6 w-6 place-items-center rounded-lg bg-green-50 text-green-600"><Check size={13} /></span>{text}</div>; }
+
+function RegisterForm() {
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+  const params = useSearchParams();
+  const { status, error } = useAppSelector((s) => s.auth);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    password_confirmation: "",
+    role: params.get("role") === "vendeur" ? "vendeur" : "acheteur",
+  });
+
+  const mismatch = form.password_confirmation.length > 0 && form.password !== form.password_confirmation;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mismatch) return;
+    const r = await dispatch(register(form));
+    if (register.fulfilled.match(r)) router.push(form.role === "vendeur" ? "/shop/create" : "/dashboard");
+  };
+
+  return (
+    <>
+      <h1 className="font-display text-4xl font-semibold text-ink-900">Créer un compte</h1>
+      <p className="mt-2 text-[15px] text-ink-500">Quelques informations suffisent pour commencer.</p>
+
+      <form onSubmit={submit} className="mt-8 space-y-5">
+        <fieldset>
+          <legend className="mb-2 text-[13px] font-semibold text-ink-700">Vous êtes ici pour…</legend>
+          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
+            {roles.map((role) => {
+              const Icon = role.icon;
+              const selected = form.role === role.value;
+              return (
+                <button
+                  key={role.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setForm({ ...form, role: role.value })}
+                  className={cn(
+                    "relative rounded-2xl border-2 bg-white p-4 text-left transition",
+                    selected ? "border-terra-500 shadow-soft" : "border-sand-200 hover:border-sand-300",
+                  )}
+                >
+                  <span className={cn("grid h-9 w-9 place-items-center rounded-xl", selected ? "bg-terra-600 text-white" : "bg-sand-100 text-ink-600")}>
+                    <Icon size={18} />
+                  </span>
+                  {selected && <Check size={16} strokeWidth={3} className="absolute right-4 top-4 text-terra-600" />}
+                  <span className="mt-3 block text-sm font-semibold text-ink-900">{role.label}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-ink-500">{role.text}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <Field label="Nom complet">
+          <Input required autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Prénom Nom" />
+        </Field>
+        <Field label="Adresse e-mail">
+          <Input type="email" required autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="vous@exemple.ma" />
+        </Field>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Mot de passe" hint="8 caractères minimum">
+            <Input type="password" required minLength={8} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          </Field>
+          <Field label="Confirmation" error={mismatch ? "Les mots de passe diffèrent" : undefined}>
+            <Input type="password" required autoComplete="new-password" value={form.password_confirmation} onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })} aria-invalid={mismatch} />
+          </Field>
+        </div>
+
+        {status === "failed" && error && <Alert>{error}</Alert>}
+
+        <Button type="submit" size="lg" className="w-full" loading={status === "loading"} disabled={mismatch}>
+          {form.role === "vendeur" ? "Créer mon compte vendeur" : "Créer mon compte"}
+          {status !== "loading" && <ArrowRight size={18} />}
+        </Button>
+        {form.role === "vendeur" && (
+          <p className="text-center text-xs text-ink-500">Vous pourrez ensuite décrire votre boutique ; elle sera publiée après validation.</p>
+        )}
+      </form>
+
+      <p className="mt-6 text-center text-sm text-ink-500">
+        Déjà inscrit ?{" "}
+        <Link href="/login" className="font-semibold text-terra-700 hover:underline">
+          Se connecter
+        </Link>
+      </p>
+    </>
+  );
+}

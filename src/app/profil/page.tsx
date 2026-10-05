@@ -1,31 +1,256 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Edit3, MapPin, Plus, Trash2, UserRound, X } from "lucide-react";
+import { Check, MapPin, Pencil, Plus, Star, Trash2, UserRound, X } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { fetchMe } from "@/features/auth/authSlice";
+import { fetchMe, type User } from "@/features/auth/authSlice";
 import api from "@/lib/axios";
+import { Alert, apiError, Avatar, Badge, Button, Card, CardHeader, EmptyState, Field, Input, LoadingRows, PageHeader } from "@/components/ui";
 
-interface Address { id: number; libelle?: string | null; nom_destinataire: string; telephone: string; adresse: string; ville: string; est_par_defaut: boolean; }
-
-export default function ProfilPage() {
-  const dispatch = useAppDispatch(); const { user } = useAppSelector((s) => s.auth);
-  const [name, setName] = useState(""); const [telephone, setTelephone] = useState(""); const [adresse, setAdresse] = useState(""); const [ville, setVille] = useState(""); const [saving, setSaving] = useState(false); const [message, setMessage] = useState("");
-  const [addresses, setAddresses] = useState<Address[]>([]); const [showAddress, setShowAddress] = useState(false); const [editing, setEditing] = useState<Address | null>(null); const [addressForm, setAddressForm] = useState({ libelle: "Domicile", nom_destinataire: "", telephone: "", adresse: "", ville: "" });
-
-  useEffect(() => { if (user) { setName(user.name); setTelephone(user.telephone || ""); setAdresse(user.adresse || ""); setVille(user.ville || ""); setAddressForm((f) => ({ ...f, nom_destinataire: user.name, telephone: user.telephone || "", adresse: user.adresse || "", ville: user.ville || "" })); } }, [user]);
-  useEffect(() => { api.get("/addresses").then((r) => setAddresses(r.data.data || r.data || [])).catch(() => {}); }, []);
-
-  const saveProfile = async (e: React.FormEvent) => { e.preventDefault(); setSaving(true); setMessage(""); try { await api.put("/me", { name, telephone, adresse, ville }); await dispatch(fetchMe()); setMessage("Profil mis à jour avec succès."); } catch (err: any) { setMessage(err.response?.data?.message || "Impossible de mettre à jour le profil."); } finally { setSaving(false); } };
-  const openNew = () => { setEditing(null); setAddressForm({ libelle: "Domicile", nom_destinataire: user?.name || "", telephone: user?.telephone || "", adresse: user?.adresse || "", ville: user?.ville || "" }); setShowAddress(true); };
-  const openEdit = (a: Address) => { setEditing(a); setAddressForm({ libelle: a.libelle || "Adresse", nom_destinataire: a.nom_destinataire, telephone: a.telephone, adresse: a.adresse, ville: a.ville }); setShowAddress(true); };
-  const saveAddress = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing) { const r = await api.put(`/addresses/${editing.id}`, { ...addressForm, est_par_defaut: editing.est_par_defaut }); const a = r.data.data || r.data; setAddresses((old) => old.map((x) => x.id === a.id ? a : x)); } else { const r = await api.post("/addresses", { ...addressForm, est_par_defaut: addresses.length === 0 }); const a = r.data.data || r.data; setAddresses((old) => [...old, a]); } setShowAddress(false); } catch (err: any) { setMessage(err.response?.data?.message || "Impossible d'enregistrer l'adresse."); } };
-  const deleteAddress = async (id: number) => { if (!confirm("Supprimer cette adresse ?")) return; try { await api.delete(`/addresses/${id}`); setAddresses((old) => old.filter((a) => a.id !== id)); } catch {} };
-  const setDefault = async (id: number) => { try { const r = await api.put(`/addresses/${id}/defaut`); const a = r.data.data || r.data; setAddresses((old) => old.map((x) => ({ ...x, est_par_defaut: x.id === a.id }))); } catch {} };
-
-  if (!user) return null;
-  return <DashboardLayout><div className="mb-7"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green-600">Mon espace</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">Mon profil</h1><p className="mt-1 text-sm text-slate-500">Gérez vos informations personnelles et vos adresses de livraison.</p></div><div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><form onSubmit={saveProfile} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="mb-6 flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl bg-green-100 text-xl font-black text-green-700">{user.name.charAt(0).toUpperCase()}</div><div><h2 className="font-extrabold">Informations personnelles</h2><p className="text-xs text-slate-400">Membre depuis {new Date(user.created_at || Date.now()).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</p></div></div><div className="grid gap-4 sm:grid-cols-2"><Field label="Nom complet" value={name} onChange={setName} /><Field label="Email" value={user.email} onChange={() => {}} disabled /><Field label="Téléphone" value={telephone} onChange={setTelephone} /><Field label="Ville" value={ville} onChange={setVille} /><label className="text-xs font-bold text-slate-600 sm:col-span-2">Adresse principale<input value={adresse} onChange={(e) => setAdresse(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-xs font-normal outline-none focus:border-green-300" /></label></div>{message && <div className="mt-4 rounded-xl bg-green-50 px-3 py-2 text-xs text-green-700">{message}</div>}<button disabled={saving} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-xs font-extrabold text-white hover:bg-green-700">{saving ? "Enregistrement..." : "Enregistrer les modifications"}<Check size={14} /></button></form><div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-extrabold">Mes adresses</h2><p className="mt-1 text-xs text-slate-400">Pour accélérer vos prochains achats.</p></div><button onClick={openNew} className="grid h-9 w-9 place-items-center rounded-xl bg-green-50 text-green-600 hover:bg-green-100"><Plus size={16} /></button></div><div className="mt-5 space-y-3">{addresses.length === 0 ? <div className="rounded-xl bg-slate-50 p-5 text-center"><MapPin className="mx-auto text-slate-300" size={22} /><p className="mt-2 text-xs text-slate-400">Aucune adresse enregistrée.</p><button onClick={openNew} className="mt-3 text-xs font-bold text-green-600">Ajouter une adresse</button></div> : addresses.map((a) => <div key={a.id} className={`rounded-xl border p-4 ${a.est_par_defaut ? "border-green-200 bg-green-50/40" : "border-slate-100"}`}><div className="flex gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-green-600"><MapPin size={15} /></div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="text-xs font-extrabold">{a.libelle || "Adresse"}</p>{a.est_par_defaut && <span className="text-[9px] font-bold text-green-600">Par défaut</span>}</div><p className="mt-1 text-[11px] leading-4 text-slate-500">{a.nom_destinataire} · {a.telephone}<br />{a.adresse}, {a.ville}</p><div className="mt-3 flex gap-3 text-[10px] font-bold"><button onClick={() => openEdit(a)} className="inline-flex items-center gap-1 text-slate-500"><Edit3 size={12} /> Modifier</button><button onClick={() => deleteAddress(a.id)} className="inline-flex items-center gap-1 text-red-500"><Trash2 size={12} /> Supprimer</button>{!a.est_par_defaut && <button onClick={() => setDefault(a.id)} className="text-green-600">Définir par défaut</button>}</div></div></div></div>)}</div></div></div>{showAddress && <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/35 p-4"><form onSubmit={saveAddress} className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="text-lg font-black">{editing ? "Modifier l'adresse" : "Nouvelle adresse"}</h2><p className="text-xs text-slate-400">Ces informations seront utilisées pour la livraison.</p></div><button type="button" onClick={() => setShowAddress(false)} className="rounded-xl bg-slate-50 p-2"><X size={17} /></button></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Libellé" value={addressForm.libelle} onChange={(v) => setAddressForm({ ...addressForm, libelle: v })} /><Field label="Destinataire" value={addressForm.nom_destinataire} onChange={(v) => setAddressForm({ ...addressForm, nom_destinataire: v })} /><Field label="Téléphone" value={addressForm.telephone} onChange={(v) => setAddressForm({ ...addressForm, telephone: v })} /><Field label="Ville" value={addressForm.ville} onChange={(v) => setAddressForm({ ...addressForm, ville: v })} /><label className="text-xs font-bold text-slate-600 sm:col-span-2">Adresse<input required value={addressForm.adresse} onChange={(e) => setAddressForm({ ...addressForm, adresse: e.target.value })} className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-xs font-normal outline-none focus:border-green-300" /></label></div><button className="mt-5 w-full rounded-xl bg-green-600 py-3 text-xs font-extrabold text-white">Enregistrer</button></form></div>}</DashboardLayout>;
+interface Address {
+  id: number;
+  libelle?: string | null;
+  nom_destinataire: string;
+  telephone: string;
+  adresse: string;
+  ville: string;
+  est_par_defaut: boolean;
 }
 
-function Field({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean }) { return <label className="text-xs font-bold text-slate-600">{label}<input value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={`mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-xs font-normal outline-none ${disabled ? "bg-slate-50 text-slate-400" : "focus:border-green-300"}`} /></label>; }
+const roleLabel: Record<string, string> = { acheteur: "Acheteur", vendeur: "Vendeur", admin: "Administrateur" };
+
+export default function ProfilPage() {
+  const { user } = useAppSelector((s) => s.auth);
+  return (
+    <DashboardLayout>
+      <PageHeader eyebrow="Mon compte" title="Profil & adresses" description="Vos informations personnelles et vos adresses de livraison." />
+      {user && (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
+          {/* key : le formulaire repart des données à jour après chaque enregistrement */}
+          <ProfileForm key={`${user.id}-${user.name}-${user.telephone}`} user={user} />
+          <Addresses user={user} />
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}
+
+function ProfileForm({ user }: { user: User }) {
+  const dispatch = useAppDispatch();
+  const [form, setForm] = useState({
+    name: user.name,
+    telephone: user.telephone || "",
+    adresse: user.adresse || "",
+    ville: user.ville || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.put("/me", form);
+      await dispatch(fetchMe());
+      setMessage({ tone: "success", text: "Profil mis à jour." });
+    } catch (err) {
+      setMessage({ tone: "error", text: apiError(err, "Impossible de mettre à jour le profil.") });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="h-fit">
+      <CardHeader title="Informations personnelles" icon={UserRound} />
+      <div className="flex items-center gap-4 px-5 pt-5">
+        <Avatar name={user.name} size="lg" />
+        <div className="min-w-0">
+          <p className="font-display text-xl font-semibold text-ink-900">{user.name}</p>
+          <p className="truncate text-sm text-ink-500">{user.email}</p>
+          <Badge tone="terra" className="mt-1.5">{roleLabel[user.role]}</Badge>
+        </div>
+      </div>
+      <form onSubmit={save} className="grid gap-4 p-5 sm:grid-cols-2">
+        <Field label="Nom complet" className="sm:col-span-2">
+          <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field>
+        <Field label="Téléphone">
+          <Input type="tel" value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} placeholder="06 00 00 00 00" />
+        </Field>
+        <Field label="Ville">
+          <Input value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} />
+        </Field>
+        <Field label="Adresse" className="sm:col-span-2">
+          <Input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} />
+        </Field>
+        {message && <Alert tone={message.tone} className="sm:col-span-2">{message.text}</Alert>}
+        <div className="sm:col-span-2">
+          <Button type="submit" loading={saving}>Enregistrer</Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function Addresses({ user }: { user: User }) {
+  const [addresses, setAddresses] = useState<Address[] | null>(null);
+  const [editing, setEditing] = useState<Address | "new" | null>(null);
+  const [error, setError] = useState("");
+
+  const load = () =>
+    api
+      .get("/addresses")
+      .then((r) => setAddresses(r.data.data || r.data || []))
+      .catch(() => setAddresses([]));
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const remove = async (id: number) => {
+    if (!confirm("Supprimer cette adresse ?")) return;
+    try {
+      await api.delete(`/addresses/${id}`);
+      await load(); // l'API peut avoir désigné une nouvelle adresse par défaut
+    } catch (err) {
+      setError(apiError(err, "Suppression impossible."));
+    }
+  };
+
+  const makeDefault = async (id: number) => {
+    try {
+      await api.put(`/addresses/${id}/defaut`);
+      setAddresses((old) => (old || []).map((x) => ({ ...x, est_par_defaut: x.id === id })));
+    } catch (err) {
+      setError(apiError(err, "Impossible de modifier l’adresse par défaut."));
+    }
+  };
+
+  return (
+    <Card className="h-fit">
+      <CardHeader
+        title="Adresses de livraison"
+        icon={MapPin}
+        action={
+          editing === null && (
+            <Button size="sm" variant="outline" onClick={() => setEditing("new")}>
+              <Plus size={14} /> Ajouter
+            </Button>
+          )
+        }
+      />
+      <div className="space-y-3 p-5">
+        {error && <Alert>{error}</Alert>}
+        {editing !== null && (
+          <AddressForm
+            key={editing === "new" ? "new" : editing.id}
+            address={editing === "new" ? null : editing}
+            user={user}
+            isFirst={(addresses || []).length === 0}
+            onCancel={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null);
+              load();
+            }}
+          />
+        )}
+        {addresses === null ? (
+          <LoadingRows rows={2} />
+        ) : addresses.length === 0 && editing === null ? (
+          <EmptyState icon={MapPin} title="Aucune adresse" description="Ajoutez une adresse pour commander plus vite." />
+        ) : (
+          addresses.map((a) => (
+            <div key={a.id} className="rounded-xl border border-sand-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                    {a.libelle || "Adresse"}
+                    {a.est_par_defaut && <Badge tone="olive"><Check size={11} /> Par défaut</Badge>}
+                  </p>
+                  <p className="mt-1 text-sm text-ink-600">{a.nom_destinataire} · {a.telephone}</p>
+                  <p className="text-sm text-ink-600">{a.adresse}, {a.ville}</p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  {!a.est_par_defaut && (
+                    <button type="button" onClick={() => makeDefault(a.id)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 hover:bg-sand-100 hover:text-ink-900" title="Définir par défaut" aria-label="Définir par défaut">
+                      <Star size={15} />
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setEditing(a)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 hover:bg-sand-100 hover:text-ink-900" title="Modifier" aria-label="Modifier">
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" onClick={() => remove(a.id)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-700" title="Supprimer" aria-label="Supprimer">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function AddressForm({
+  address,
+  user,
+  isFirst,
+  onCancel,
+  onSaved,
+}: {
+  address: Address | null;
+  user: User;
+  isFirst: boolean;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    libelle: address?.libelle || "Domicile",
+    nom_destinataire: address?.nom_destinataire || user.name,
+    telephone: address?.telephone || user.telephone || "",
+    adresse: address?.adresse || user.adresse || "",
+    ville: address?.ville || user.ville || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      if (address) await api.put(`/addresses/${address.id}`, { ...form, est_par_defaut: address.est_par_defaut });
+      else await api.post("/addresses", { ...form, est_par_defaut: isFirst });
+      onSaved();
+    } catch (err) {
+      setError(apiError(err, "Impossible d’enregistrer l’adresse."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="grid gap-4 rounded-xl border border-terra-200 bg-terra-50/40 p-4 sm:grid-cols-2">
+      <div className="flex items-center justify-between sm:col-span-2">
+        <p className="font-semibold text-ink-900">{address ? "Modifier l’adresse" : "Nouvelle adresse"}</p>
+        <button type="button" onClick={onCancel} className="grid h-8 w-8 place-items-center rounded-full text-ink-500 hover:bg-white" aria-label="Annuler">
+          <X size={16} />
+        </button>
+      </div>
+      <Field label="Libellé"><Input value={form.libelle} onChange={(e) => setForm({ ...form, libelle: e.target.value })} /></Field>
+      <Field label="Destinataire"><Input required value={form.nom_destinataire} onChange={(e) => setForm({ ...form, nom_destinataire: e.target.value })} /></Field>
+      <Field label="Adresse" className="sm:col-span-2"><Input required value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} /></Field>
+      <Field label="Ville"><Input required value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} /></Field>
+      <Field label="Téléphone"><Input required type="tel" value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} /></Field>
+      {error && <Alert className="sm:col-span-2">{error}</Alert>}
+      <div className="flex gap-2 sm:col-span-2">
+        <Button type="submit" loading={saving}>Enregistrer</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>Annuler</Button>
+      </div>
+    </form>
+  );
+}

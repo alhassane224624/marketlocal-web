@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import api from "@/lib/axios";
+import { apiError } from "@/lib/errors";
 
 export interface User {
   id: number;
@@ -40,8 +41,8 @@ export const login = createAsyncThunk(
     try {
       const response = await api.post("/login", credentials);
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(err.response?.data?.message || "Erreur de connexion");
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur de connexion"));
     }
   }
 );
@@ -61,12 +62,8 @@ export const register = createAsyncThunk(
     try {
       const response = await api.post("/register", data);
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.message ||
-          err.response?.data?.errors ||
-          "Erreur d'inscription"
-      );
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur d'inscription"));
     }
   }
 );
@@ -75,7 +72,7 @@ export const fetchMe = createAsyncThunk("auth/me", async (_, { rejectWithValue }
   try {
     const response = await api.get("/me");
     return response.data;
-  } catch (err: any) {
+  } catch {
     return rejectWithValue("Session expirée");
   }
 });

@@ -1,9 +1,88 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Package } from "lucide-react";
+import { ChevronRight, ShoppingBag } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
-import { money, StatusBadge } from "@/components/MarketLocalUI";
-interface Order{ id:number; statut:string; total:string; created_at:string; items:{id:number;quantite:number;prix_unitaire:string;product:{id:number;nom:string}}[]; }
-export default function MesCommandesPage(){const [orders,setOrders]=useState<Order[]>([]);const [loading,setLoading]=useState(true);useEffect(()=>{api.get("/orders/mine").then(r=>setOrders(r.data)).finally(()=>setLoading(false));},[]);return <DashboardLayout><div className="mb-7"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green-600">Acheteur</p><h1 className="mt-1 text-3xl font-black">Mes commandes</h1><p className="mt-1 text-sm text-slate-500">Retrouvez vos achats et leur statut de livraison.</p></div>{loading?<div className="rounded-2xl bg-white p-12 text-center text-xs text-slate-400">Chargement...</div>:orders.length===0?<div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center"><Package className="mx-auto text-slate-300"/><p className="mt-3 text-sm font-bold">Vous n'avez pas encore commandé.</p><Link href="/catalogue" className="mt-4 inline-flex rounded-xl bg-green-600 px-4 py-2.5 text-xs font-bold text-white">Explorer le catalogue</Link></div>:<div className="space-y-3">{orders.map(o=><Link key={o.id} href={`/commandes/${o.id}`} className="block rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:-translate-y-0.5 hover:shadow-md"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-green-50 text-green-600"><Package size={18}/></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-extrabold">Commande #{o.id}</p><StatusBadge status={o.statut}/></div><p className="mt-1 truncate text-[11px] text-slate-400">{o.items.map(i=>`${i.product.nom} ×${i.quantite}`).join(", ")}</p><p className="mt-1 text-[10px] text-slate-400">{new Date(o.created_at).toLocaleDateString("fr-FR")}</p></div></div><div className="flex items-center justify-between gap-4 sm:justify-end"><p className="text-base font-black">{money(o.total)}</p><ChevronRight size={17} className="text-slate-300"/></div></div></Link>)}</div>}</DashboardLayout>}
+import { ButtonLink, Card, EmptyState, formatDate, LoadingRows, money, PageHeader, Segmented, StatusBadge } from "@/components/ui";
+
+interface Order {
+  id: number;
+  statut: string;
+  total: string;
+  created_at: string;
+  items: { id: number; quantite: number; prix_unitaire: string; product: { id: number; nom: string } }[];
+}
+
+const filters = [
+  { value: null, label: "Toutes" },
+  { value: "en_attente", label: "À payer" },
+  { value: "payee", label: "Payées" },
+  { value: "expediee", label: "Expédiées" },
+  { value: "livree", label: "Livrées" },
+  { value: "annulee", label: "Annulées" },
+];
+
+export default function MesCommandesPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get("/orders/mine")
+      .then((r) => setOrders(r.data))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filter ? orders.filter((o) => o.statut === filter) : orders;
+
+  return (
+    <DashboardLayout>
+      <PageHeader eyebrow="Espace acheteur" title="Mes commandes" description="Retrouvez vos achats et suivez leur livraison." />
+
+      {!loading && orders.length > 0 && (
+        <div className="mb-6">
+          <Segmented
+            options={filters.map((f) => ({ ...f, count: f.value ? orders.filter((o) => o.statut === f.value).length : orders.length }))}
+            value={filter}
+            onChange={setFilter}
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <LoadingRows />
+      ) : orders.length === 0 ? (
+        <EmptyState icon={ShoppingBag} title="Aucune commande" description="Vous n’avez pas encore commandé." action={<ButtonLink href="/catalogue">Découvrir le catalogue</ButtonLink>} />
+      ) : filtered.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-sand-300 p-10 text-center text-sm text-ink-500">Aucune commande dans cette catégorie.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((order) => (
+            <Card key={order.id} className="transition hover:shadow-lift">
+              <Link href={`/commandes/${order.id}`} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="font-display text-lg font-semibold text-ink-900">Commande #{order.id}</p>
+                    <StatusBadge status={order.statut} />
+                  </div>
+                  <p className="mt-1 text-sm text-ink-500">
+                    {formatDate(order.created_at, true)} · {order.items.reduce((s, i) => s + i.quantite, 0)} article(s)
+                  </p>
+                  <p className="mt-2 line-clamp-1 text-sm text-ink-700">{order.items.map((i) => `${i.product.nom} ×${i.quantite}`).join(" · ")}</p>
+                </div>
+                <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  {order.statut === "en_attente" && <span className="text-sm font-semibold text-terra-700">Payer maintenant</span>}
+                  <p className="font-display text-xl font-semibold tabular-nums">{money(order.total)}</p>
+                  <ChevronRight size={18} className="text-ink-400" />
+                </div>
+              </Link>
+            </Card>
+          ))}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}

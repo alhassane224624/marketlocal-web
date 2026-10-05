@@ -10,6 +10,7 @@ export interface Stats {
   total_produits: number;
   total_commandes: number;
   chiffre_affaires_total: number;
+  commissions_total?: number;
 }
 
 export interface ShopAdmin {
@@ -17,6 +18,10 @@ export interface ShopAdmin {
   nom: string;
   description: string | null;
   statut: "en_attente" | "valide" | "refuse";
+  commission?: string;
+  is_active?: boolean;
+  kyc_status?: string;
+  created_at?: string;
   user: { id: number; name: string; email: string };
 }
 
