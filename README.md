@@ -161,6 +161,19 @@ La configuration de test utilise SQLite en mémoire.
 - snapshots historiques des lignes de commande
 - aucun numéro de carte bancaire stocké par MarketLocal
 
+## Comptes de démonstration
+
+Créés par `php artisan migrate --seed` côté API (mot de passe commun : `password`). Ils sont aussi proposés en un clic sur la page de connexion.
+
+| Rôle | E-mail | Ce qu'on peut tester |
+|---|---|---|
+| Acheteur | `acheteur@marketlocal.test` | panier, paiement, suivi, avis (3 commandes déjà passées) |
+| Vendeuse | `vendeur@marketlocal.test` | boutique « Atelier Amina », produits, commandes reçues, statistiques |
+| Administrateur | `admin@marketlocal.test` | validation de boutique (« Épicerie Fine Omar » est en attente), commissions, statistiques |
+
+Autres comptes de démo : `youssef@`, `salma@`, `omar@` (vendeurs) et `lina@marketlocal.test` (acheteuse).
+Pour masquer le bloc des comptes de démo en production : `NEXT_PUBLIC_DEMO_ACCOUNTS=false`.
+
 ## Parcours de démonstration
 
 ```text

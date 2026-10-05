@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MessageSquareQuote } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Star, MessageSquare } from "lucide-react";
+import { Avatar, Card, EmptyState, formatDate, LoadingRows, PageHeader, Stars } from "@/components/ui";
 
 interface Review {
   id: number;
@@ -12,15 +13,6 @@ interface Review {
   created_at: string;
   product: { id: number; nom: string };
   user: { id: number; name: string };
-}
-
-function Stars({ note }: { note: number }) {
-  return (
-    <span className="text-yellow-500 tracking-tight">
-      {"★".repeat(note)}
-      <span className="text-gray-300">{"★".repeat(5 - note)}</span>
-    </span>
-  );
 }
 
 export default function MesAvisRecusPage() {
@@ -36,86 +28,59 @@ export default function MesAvisRecusPage() {
 
   const total = reviews.length;
   const moyenne = total > 0 ? reviews.reduce((s, r) => s + r.note, 0) / total : 0;
-  const distribution = [5, 4, 3, 2, 1].map((n) => ({
-    note: n,
-    count: reviews.filter((r) => r.note === n).length,
-  }));
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-1">Avis clients</h1>
-      <p className="text-gray-500 mb-6">Ce que vos clients pensent de vos produits</p>
+      <PageHeader eyebrow="Espace vendeur" title="Avis clients" description="Ce que vos acheteurs pensent de vos produits." />
 
-      {loading && <p className="text-gray-500 text-center py-12">Chargement...</p>}
-
-      {!loading && total === 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <MessageSquare className="mx-auto text-gray-300 mb-3" size={36} />
-          <p className="text-gray-500">Vous n'avez pas encore reçu d'avis.</p>
-        </div>
-      )}
-
-      {!loading && total > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Résumé */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-fit">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-12 h-12 rounded-xl bg-yellow-50 text-yellow-500 flex items-center justify-center">
-                <Star size={22} fill="currentColor" />
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{moyenne.toFixed(1)}</p>
-                <p className="text-xs text-gray-500">
-                  {total} avis
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {distribution.map((d) => (
-                <div key={d.note} className="flex items-center gap-2 text-sm">
-                  <span className="w-3 text-gray-500">{d.note}</span>
-                  <Star size={12} className="text-yellow-500" fill="currentColor" />
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-yellow-400 rounded-full"
-                      style={{ width: `${(d.count / total) * 100}%` }}
-                    />
+      {loading ? (
+        <LoadingRows />
+      ) : total === 0 ? (
+        <EmptyState icon={MessageSquareQuote} title="Pas encore d’avis" description="Les acheteurs peuvent noter un produit après l’avoir payé." />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+          <Card className="h-fit p-6">
+            <p className="font-display text-6xl font-semibold text-ink-900">{moyenne.toFixed(1).replace(".", ",")}</p>
+            <Stars value={moyenne} size={18} className="mt-2" />
+            <p className="mt-1 text-sm text-ink-500">{total} avis</p>
+            <div className="mt-6 space-y-2">
+              {[5, 4, 3, 2, 1].map((n) => {
+                const count = reviews.filter((r) => r.note === n).length;
+                return (
+                  <div key={n} className="flex items-center gap-3 text-sm">
+                    <span className="w-3 text-ink-600">{n}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-sand-200">
+                      <div className="h-full rounded-full bg-saffron-400" style={{ width: `${(count / total) * 100}%` }} />
+                    </div>
+                    <span className="w-5 text-right tabular-nums text-ink-500">{count}</span>
                   </div>
-                  <span className="w-5 text-right text-gray-500">{d.count}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
+          </Card>
 
-          {/* Liste */}
-          <div className="lg:col-span-2 space-y-3">
+          <ul className="space-y-3">
             {reviews.map((review) => (
-              <div
-                key={review.id}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-semibold">
-                      {review.user.name.charAt(0)}
+              <li key={review.id}>
+                <Card className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={review.user.name} size="sm" />
+                      <div>
+                        <p className="text-sm font-semibold text-ink-900">{review.user.name}</p>
+                        <p className="text-xs text-ink-500">{formatDate(review.created_at, true)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-800 text-sm">{review.user.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(review.created_at).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
+                    <Stars value={review.note} />
                   </div>
-                  <Stars note={review.note} />
-                </div>
-                <p className="text-xs text-green-700 font-medium mb-1">{review.product.nom}</p>
-                <p className="text-sm text-gray-600">
-                  {review.commentaire || <span className="text-gray-400">Aucun commentaire.</span>}
-                </p>
-              </div>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-terra-700">{review.product.nom}</p>
+                  <p className="mt-1 text-[15px] leading-relaxed text-ink-700">
+                    {review.commentaire || <span className="text-ink-500">Aucun commentaire.</span>}
+                  </p>
+                </Card>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </DashboardLayout>

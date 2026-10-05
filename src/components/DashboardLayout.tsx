@@ -3,59 +3,110 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { fetchMe } from "@/features/auth/authSlice";
-import api from "@/lib/axios";
-import { logout } from "@/features/auth/authSlice";
 import {
-  BarChart3, Bell, ChevronRight, CircleHelp, LayoutDashboard, LogOut, Menu, Package,
-  Percent, Search, Settings, ShoppingBag, ShoppingCart, Store, Tag, User, Users, X,
+  BarChart3,
+  ExternalLink,
+  FolderTree,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessageSquareQuote,
+  Package,
+  ReceiptText,
+  ShoppingBag,
+  Store,
+  UserRound,
+  Users,
+  X,
+  type LucideIcon,
 } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { fetchMe, logout } from "@/features/auth/authSlice";
+import api from "@/lib/axios";
 import { Logo } from "./MarketLocalUI";
+import { Avatar, cn } from "./ui";
 
-interface NavItem { label: string; href: string; icon: React.ReactNode; }
+interface NavItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+}
 
-const navByRole: Record<string, NavItem[]> = {
+const navByRole: Record<string, { title: string; items: NavItem[] }[]> = {
   acheteur: [
-    { label: "Tableau de bord", href: "/dashboard", icon: <LayoutDashboard size={17} /> },
-    { label: "Catalogue", href: "/catalogue", icon: <Store size={17} /> },
-    { label: "Mes commandes", href: "/mes-commandes", icon: <Package size={17} /> },
-    { label: "Mon profil", href: "/profil", icon: <User size={17} /> },
+    {
+      title: "Mon espace",
+      items: [
+        { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Mes commandes", href: "/mes-commandes", icon: ReceiptText },
+        { label: "Mon panier", href: "/panier", icon: ShoppingBag },
+        { label: "Profil & adresses", href: "/profil", icon: UserRound },
+      ],
+    },
   ],
   vendeur: [
-    { label: "Tableau de bord", href: "/dashboard", icon: <LayoutDashboard size={17} /> },
-    { label: "Ma boutique", href: "/ma-boutique", icon: <Store size={17} /> },
-    { label: "Produits", href: "/mes-produits", icon: <Package size={17} /> },
-    { label: "Commandes", href: "/mes-commandes-vendeur", icon: <ShoppingCart size={17} /> },
-    { label: "Avis clients", href: "/mes-avis-recus", icon: <ShoppingBag size={17} /> },
-    { label: "Statistiques", href: "/mes-statistiques", icon: <BarChart3 size={17} /> },
-    { label: "Mon profil", href: "/profil", icon: <User size={17} /> },
+    {
+      title: "Boutique",
+      items: [
+        { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Ma boutique", href: "/ma-boutique", icon: Store },
+        { label: "Produits", href: "/mes-produits", icon: Package },
+        { label: "Commandes", href: "/mes-commandes-vendeur", icon: ReceiptText },
+      ],
+    },
+    {
+      title: "Suivi",
+      items: [
+        { label: "Statistiques", href: "/mes-statistiques", icon: BarChart3 },
+        { label: "Avis clients", href: "/mes-avis-recus", icon: MessageSquareQuote },
+        { label: "Mon profil", href: "/profil", icon: UserRound },
+      ],
+    },
   ],
   admin: [
-    { label: "Tableau de bord", href: "/dashboard", icon: <LayoutDashboard size={17} /> },
-    { label: "Utilisateurs", href: "/admin/utilisateurs", icon: <Users size={17} /> },
-    { label: "Boutiques", href: "/admin/commissions", icon: <Store size={17} /> },
-    { label: "Commandes", href: "/admin/commandes", icon: <ShoppingCart size={17} /> },
-    { label: "Catégories", href: "/admin/categories", icon: <Tag size={17} /> },
-    { label: "Statistiques", href: "/admin/statistiques", icon: <BarChart3 size={17} /> },
+    {
+      title: "Plateforme",
+      items: [
+        { label: "Vue d’ensemble", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Statistiques", href: "/admin/statistiques", icon: BarChart3 },
+        { label: "Commandes", href: "/admin/commandes", icon: ReceiptText },
+      ],
+    },
+    {
+      title: "Gestion",
+      items: [
+        { label: "Boutiques", href: "/admin/commissions", icon: Store },
+        { label: "Utilisateurs", href: "/admin/utilisateurs", icon: Users },
+        { label: "Catégories", href: "/admin/categories", icon: FolderTree },
+      ],
+    },
   ],
 };
 
-const roleLabel: Record<string, string> = { acheteur: "Acheteur", vendeur: "Vendeur", admin: "Administrateur" };
+const roleLabel: Record<string, string> = {
+  acheteur: "Acheteur",
+  vendeur: "Vendeur",
+  admin: "Administrateur",
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
-  const cartCount = useAppSelector((state) => state.cart.items.reduce((sum, item) => sum + item.quantite, 0));
-  const [open, setOpen] = useState(false);
+  const { user, token } = useAppSelector((state) => state.auth);
+  // Le tiroir mobile se referme tout seul en changeant de page.
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const open = openedOn === pathname;
 
   useEffect(() => {
-    if (!user && typeof window !== "undefined" && localStorage.getItem("token")) {
+    if (user) return;
+    if (typeof window !== "undefined" && localStorage.getItem("token")) {
       dispatch(fetchMe());
+    } else {
+      // Pas (ou plus) de session : retour à la connexion, puis ici après login.
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
-  }, [user, dispatch]);
+  }, [user, token, pathname, dispatch, router]);
 
   useEffect(() => {
     if (!user) return;
@@ -69,33 +120,126 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     else if (needsBuyer && user.role !== "acheteur") router.replace("/dashboard");
   }, [pathname, user, router]);
 
-  if (!user) return <div className="min-h-screen bg-[#f7faf8] flex items-center justify-center"><p className="text-sm text-slate-400">Chargement de votre espace...</p></div>;
+  if (!user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-sand-50">
+        <div className="flex flex-col items-center gap-4">
+          <Logo compact />
+          <p className="text-sm text-ink-500">Chargement de votre espace…</p>
+        </div>
+      </div>
+    );
+  }
 
-  const nav = navByRole[user.role] || [];
+  const sections = navByRole[user.role] || [];
+
   const handleLogout = async () => {
-    try { await api.post("/logout"); } catch {}
+    try {
+      await api.post("/logout");
+    } catch {
+      // Le token est peut-être déjà expiré : on déconnecte quand même localement.
+    }
     dispatch(logout());
-    setOpen(false);
     router.push("/login");
   };
 
-  return (
-    <div className="min-h-screen bg-[#f7faf8] text-slate-800">
-      {open && <button aria-label="Fermer" onClick={() => setOpen(false)} className="fixed inset-0 z-30 bg-slate-950/30 lg:hidden" />}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col border-r border-slate-100 bg-white transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <div className="flex h-[76px] items-center border-b border-slate-100 px-5"><Logo compact /><button onClick={() => setOpen(false)} className="ml-auto rounded-lg p-2 text-slate-400 lg:hidden"><X size={18} /></button></div>
-        <div className="mx-4 mt-4 rounded-2xl bg-slate-50 p-3"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-green-100 font-extrabold text-green-700">{user.name.charAt(0).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{user.name}</p><p className="text-[10px] font-medium text-slate-400">{roleLabel[user.role]}</p></div></div></div>
-        <nav className="flex-1 overflow-y-auto px-3 py-5">{nav.map((item) => { const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href)); return <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`group mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${active ? "bg-green-50 text-green-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>{item.icon}<span className="flex-1">{item.label}</span>{active && <ChevronRight size={14} />}</Link>; })}</nav>
-        <div className="border-t border-slate-100 p-3"><Link href="/profil" className="mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50"><Settings size={17} /> Paramètres</Link><button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-red-500 hover:bg-red-50"><LogOut size={17} /> Déconnexion</button></div>
-      </aside>
+  const sidebar = (
+    <div className="zellige-light flex h-full flex-col bg-ink-900 text-sand-200">
+      <div className="flex h-16 items-center justify-between px-5">
+        <Logo inverted />
+        <button
+          type="button"
+          onClick={() => setOpenedOn(null)}
+          className="grid h-9 w-9 place-items-center rounded-lg text-sand-300 hover:bg-white/10 lg:hidden"
+          aria-label="Fermer le menu"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-      <div className="lg:pl-[252px]">
-        <header className="sticky top-0 z-20 flex h-[76px] items-center gap-3 border-b border-slate-100 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
-          <button onClick={() => setOpen(true)} className="rounded-xl border border-slate-200 p-2 text-slate-600 lg:hidden"><Menu size={19} /></button>
-          <div className="hidden max-w-xl flex-1 sm:block"><div className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-400"><Search size={16} /><input className="w-full bg-transparent text-xs outline-none placeholder:text-slate-400" placeholder="Rechercher dans MarketLocal..." /></div></div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3"><Link href={user.role === "acheteur" ? "/panier" : "/dashboard"} className="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-100 text-slate-500 hover:bg-slate-50">{user.role === "acheteur" ? <ShoppingCart size={17} /> : <Bell size={17} />}{user.role === "acheteur" && cartCount > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-green-600 px-1 text-[9px] font-bold text-white">{cartCount}</span>}</Link><div className="hidden h-7 w-px bg-slate-200 sm:block" /><div className="flex items-center gap-2"><div className="grid h-9 w-9 place-items-center rounded-xl bg-green-100 text-xs font-extrabold text-green-700">{user.name.charAt(0).toUpperCase()}</div><div className="hidden md:block"><p className="text-xs font-bold text-slate-800">{user.name}</p><p className="text-[10px] text-slate-400">{roleLabel[user.role]}</p></div></div></div>
+      <nav className="flex-1 space-y-7 overflow-y-auto px-3 py-6" aria-label="Navigation de l’espace">
+        {sections.map((section) => (
+          <div key={section.title}>
+            <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-300">{section.title}</p>
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                        active ? "bg-white/10 text-white" : "text-sand-300 hover:bg-white/5 hover:text-white",
+                      )}
+                    >
+                      {active && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-terra-400" />}
+                      <Icon size={18} className={active ? "text-terra-300" : ""} />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div className="space-y-1 border-t border-white/10 p-3">
+        <Link href="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-sand-300 hover:bg-white/5 hover:text-white">
+          <ExternalLink size={18} /> Voir la marketplace
+        </Link>
+        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+          <Avatar name={user.name} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+            <p className="text-xs text-ink-300">{roleLabel[user.role]}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="grid h-8 w-8 place-items-center rounded-lg text-sand-300 hover:bg-white/10 hover:text-white"
+            aria-label="Se déconnecter"
+            title="Se déconnecter"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-sand-50">
+      {/* Barre latérale fixe (desktop) */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">{sidebar}</aside>
+
+      {/* Tiroir (mobile) */}
+      {open && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button type="button" aria-label="Fermer le menu" onClick={() => setOpenedOn(null)} className="absolute inset-0 bg-ink-950/50" />
+          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl">{sidebar}</aside>
+        </div>
+      )}
+
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-sand-200 bg-sand-50/90 px-4 backdrop-blur-md lg:hidden">
+          <button
+            type="button"
+            onClick={() => setOpenedOn(pathname)}
+            className="grid h-10 w-10 place-items-center rounded-xl border border-sand-300 bg-white text-ink-700"
+            aria-label="Ouvrir le menu"
+          >
+            <Menu size={19} />
+          </button>
+          <Logo />
+          <Avatar name={user.name} size="sm" className="ml-auto" />
         </header>
-        <main className="min-h-[calc(100vh-76px)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1240px]">{children}</div></main>
+        <main className="px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+          <div className="mx-auto max-w-6xl animate-fade-up">{children}</div>
+        </main>
       </div>
     </div>
   );

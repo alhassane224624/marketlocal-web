@@ -1,45 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { MapPin, PackageCheck, ReceiptText, Truck } from "lucide-react";
 import api from "@/lib/axios";
+import { itemsTotal, shopStatut } from "@/lib/orders";
 import DashboardLayout from "@/components/DashboardLayout";
-import { ShoppingCart } from "lucide-react";
+import { Alert, apiError, Avatar, Button, Card, EmptyState, formatDate, LoadingRows, money, PageHeader, Segmented, StatusBadge } from "@/components/ui";
 
 interface ShopOrder {
   id: number;
   statut: string;
   created_at: string;
+  ville_livraison?: string | null;
   buyer: { name: string; email: string };
-  items: {
-    id: number;
-    quantite: number;
-    prix_unitaire: string;
-    product: { nom: string };
-  }[];
+  items: { id: number; quantite: number; statut: string; prix_unitaire: string; product: { nom: string } }[];
 }
 
-const statutLabels: Record<string, string> = {
-  en_attente: "En attente de paiement",
-  payee: "Payée",
-  expediee: "Expédiée",
-  livree: "Livrée",
-  annulee: "Annulée",
-};
-
-const statutColors: Record<string, string> = {
-  en_attente: "bg-yellow-100 text-yellow-700",
-  payee: "bg-blue-100 text-blue-700",
-  expediee: "bg-purple-100 text-purple-700",
-  livree: "bg-green-100 text-green-700",
-  annulee: "bg-red-100 text-red-700",
-};
-
 const filters = [
-  { key: null, label: "Toutes" },
-  { key: "payee", label: "À expédier" },
-  { key: "expediee", label: "Expédiées" },
-  { key: "livree", label: "Livrées" },
-  { key: "en_attente", label: "En attente" },
+  { value: null, label: "Toutes" },
+  { value: "payee", label: "À expédier" },
+  { value: "expediee", label: "Expédiées" },
+  { value: "livree", label: "Livrées" },
+  { value: "en_attente", label: "Non payées" },
 ];
 
 export default function MesCommandesVendeurPage() {
@@ -47,6 +30,7 @@ export default function MesCommandesVendeurPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = () =>
     api
@@ -60,110 +44,83 @@ export default function MesCommandesVendeurPage() {
 
   const updateStatus = async (id: number, statut: string) => {
     setUpdatingId(id);
+    setError(null);
     try {
       await api.put(`/orders/${id}/statut`, { statut });
       await load();
+    } catch (err) {
+      setError(apiError(err, "Erreur lors de la mise à jour du statut."));
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const filtered = filter ? orders.filter((o) => o.statut === filter) : orders;
-
-  const totalOf = (o: ShopOrder) =>
-    o.items.reduce((sum, i) => sum + parseFloat(i.prix_unitaire) * i.quantite, 0);
+  const filtered = filter ? orders.filter((o) => shopStatut(o) === filter) : orders;
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-1">Commandes</h1>
-      <p className="text-gray-500 mb-6">Suivez et traitez les commandes de votre boutique</p>
+      <PageHeader eyebrow="Espace vendeur" title="Commandes reçues" description="Préparez, expédiez puis confirmez la livraison de vos articles." />
 
-      <div className="flex flex-wrap gap-2 mb-5">
-        {filters.map((f) => (
-          <button
-            key={f.label}
-            onClick={() => setFilter(f.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-              filter === f.key
-                ? "bg-green-600 text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {loading && <p className="text-gray-500 text-center py-12">Chargement...</p>}
-
-      {!loading && filtered.length === 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <ShoppingCart className="mx-auto text-gray-300 mb-3" size={36} />
-          <p className="text-gray-500">Aucune commande dans cette catégorie.</p>
+      {!loading && orders.length > 0 && (
+        <div className="mb-6">
+          <Segmented
+            options={filters.map((f) => ({ ...f, count: f.value ? orders.filter((o) => shopStatut(o) === f.value).length : orders.length }))}
+            value={filter}
+            onChange={setFilter}
+          />
         </div>
       )}
 
-      {!loading && filtered.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-left border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-3 font-medium">Commande</th>
-                <th className="px-5 py-3 font-medium">Client</th>
-                <th className="px-5 py-3 font-medium">Articles</th>
-                <th className="px-5 py-3 font-medium">Montant</th>
-                <th className="px-5 py-3 font-medium">Statut</th>
-                <th className="px-5 py-3 font-medium text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50 transition">
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-gray-800">#{order.id}</p>
-                    <p className="text-xs text-gray-400">
-                      {new Date(order.created_at).toLocaleDateString("fr-FR")}
-                    </p>
-                  </td>
-                  <td className="px-5 py-3">
-                    <p className="text-gray-800">{order.buyer.name}</p>
-                    <p className="text-xs text-gray-400">{order.buyer.email}</p>
-                  </td>
-                  <td className="px-5 py-3 text-gray-600">
-                    {order.items.map((i) => `${i.product.nom} ×${i.quantite}`).join(", ")}
-                  </td>
-                  <td className="px-5 py-3 font-semibold text-gray-700">
-                    {totalOf(order).toFixed(2)} MAD
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statutColors[order.statut]}`}>
-                      {statutLabels[order.statut]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    {order.statut === "payee" && (
-                      <button
-                        onClick={() => updateStatus(order.id, "expediee")}
-                        disabled={updatingId === order.id}
-                        className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg transition"
-                      >
-                        Marquer expédiée
-                      </button>
+      {error && <Alert className="mb-4">{error}</Alert>}
+
+      {loading ? (
+        <LoadingRows />
+      ) : orders.length === 0 ? (
+        <EmptyState icon={ReceiptText} title="Aucune commande pour l’instant" description="Les commandes contenant vos produits apparaîtront ici." />
+      ) : filtered.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-sand-300 p-10 text-center text-sm text-ink-500">Aucune commande dans cette catégorie.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((order) => {
+            const statut = shopStatut(order);
+            return (
+              <Card key={order.id} className="p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                  <div className="flex min-w-0 flex-1 items-start gap-4">
+                    <Avatar name={order.buyer.name} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/commandes/${order.id}`} className="font-display text-lg font-semibold text-ink-900 hover:text-terra-700">
+                          Commande #{order.id}
+                        </Link>
+                        <StatusBadge status={statut} />
+                      </div>
+                      <p className="mt-0.5 text-sm text-ink-500">
+                        {order.buyer.name} · {formatDate(order.created_at)}
+                        {order.ville_livraison && (
+                          <span className="ml-2 inline-flex items-center gap-1"><MapPin size={13} />{order.ville_livraison}</span>
+                        )}
+                      </p>
+                      <p className="mt-2 text-sm text-ink-700">{order.items.map((i) => `${i.product.nom} ×${i.quantite}`).join(" · ")}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 lg:justify-end">
+                    <p className="font-display text-xl font-semibold tabular-nums">{money(itemsTotal(order))}</p>
+                    {statut === "payee" && (
+                      <Button onClick={() => updateStatus(order.id, "expediee")} loading={updatingId === order.id}>
+                        <Truck size={16} /> Marquer expédiée
+                      </Button>
                     )}
-                    {order.statut === "expediee" && (
-                      <button
-                        onClick={() => updateStatus(order.id, "livree")}
-                        disabled={updatingId === order.id}
-                        className="px-3 py-1.5 text-xs border border-green-600 text-green-700 hover:bg-green-50 disabled:opacity-50 rounded-lg transition"
-                      >
-                        Marquer livrée
-                      </button>
+                    {statut === "expediee" && (
+                      <Button variant="success" onClick={() => updateStatus(order.id, "livree")} loading={updatingId === order.id}>
+                        <PackageCheck size={16} /> Marquer livrée
+                      </Button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </DashboardLayout>
