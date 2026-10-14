@@ -1,6 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "@/lib/axios";
 
+export interface ProductImage {
+  id: number;
+  url: string;
+  position: number;
+}
+
 export interface Product {
   id: number;
   nom: string;
@@ -8,9 +14,14 @@ export interface Product {
   prix: string;
   stock: number;
   image: string | null;
+  note_moyenne?: number | null;
+  nombre_avis?: number;
   shop: { id: number; nom: string };
   category: { id: number; nom: string };
-  reviews?: { id: number; note: number; commentaire: string | null }[];
+  category_id?: number;
+  categories?: { id: number; nom: string }[];
+  images?: ProductImage[];
+  reviews?: { id: number; note: number; commentaire: string | null; user?: { id: number; name: string } }[];
 }
 
 interface ProductsState {
@@ -19,6 +30,7 @@ interface ProductsState {
   status: "idle" | "loading" | "failed";
   currentPage: number;
   lastPage: number;
+  total: number;
 }
 
 const initialState: ProductsState = {
@@ -27,6 +39,7 @@ const initialState: ProductsState = {
   status: "idle",
   currentPage: 1,
   lastPage: 1,
+  total: 0,
 };
 
 export const fetchProducts = createAsyncThunk(
@@ -68,6 +81,7 @@ const productSlice = createSlice({
         state.items = action.payload.data;
         state.currentPage = action.payload.current_page;
         state.lastPage = action.payload.last_page;
+        state.total = action.payload.total;
       })
       .addCase(fetchProducts.rejected, (state) => {
         state.status = "failed";

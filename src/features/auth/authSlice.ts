@@ -1,11 +1,12 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import api from "@/lib/axios";
+import { apiError } from "@/lib/errors";
 
 export interface User {
   id: number;
   name: string;
   email: string;
-  role: "acheteur" | "vendeur" | "admin";
+  role: "acheteur" | "vendeur" | "admin" | "livreur";
   telephone?: string | null;
   adresse?: string | null;
   ville?: string | null;
@@ -17,6 +18,8 @@ interface AuthState {
   token: string | null;
   status: "idle" | "loading" | "failed";
   error: string | null;
+  /** /me en cours : évite d'envoyer plusieurs fois la même requête. */
+  meLoading: boolean;
 }
 
 // Relit le token sauvegardé : sans ça, un rafraîchissement de la page (F5)
@@ -32,6 +35,7 @@ const initialState: AuthState = {
   token: readStoredToken(),
   status: "idle",
   error: null,
+  meLoading: false,
 };
 
 export const login = createAsyncThunk(
@@ -40,8 +44,8 @@ export const login = createAsyncThunk(
     try {
       const response = await api.post("/login", credentials);
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(err.response?.data?.message || "Erreur de connexion");
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur de connexion"));
     }
   }
 );
@@ -55,30 +59,43 @@ export const register = createAsyncThunk(
       password: string;
       password_confirmation: string;
       role: string;
+      telephone?: string;
+      ville?: string;
     },
     { rejectWithValue }
   ) => {
     try {
       const response = await api.post("/register", data);
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.message ||
-          err.response?.data?.errors ||
-          "Erreur d'inscription"
-      );
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur d'inscription"));
     }
   }
 );
 
-export const fetchMe = createAsyncThunk("auth/me", async (_, { rejectWithValue }) => {
-  try {
-    const response = await api.get("/me");
-    return response.data;
-  } catch (err: any) {
-    return rejectWithValue("Session expirée");
+// Plusieurs composants demandent l'utilisateur au chargement (providers, DashboardLayout,
+// dashboard) et React les exécute deux fois en mode dev : sans garde, /me partait 4 fois.
+// `condition` annule l'appel si /me est déjà en cours ou si l'utilisateur est déjà chargé
+// (sauf { force: true }, utilisé après une modification du profil).
+export const fetchMe = createAsyncThunk(
+  "auth/me",
+  async (_arg: { force?: boolean } | undefined, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/me");
+      return response.data;
+    } catch {
+      return rejectWithValue("Session expirée");
+    }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { auth } = getState() as { auth: AuthState };
+      if (auth.meLoading) return false;
+      if (auth.user && !arg?.force) return false;
+      return true;
+    },
   }
-});
+);
 
 const authSlice = createSlice({
   name: "auth",
@@ -142,10 +159,16 @@ const authSlice = createSlice({
           state.error = "Erreur lors de l'inscription";
         }
       })
+      .addCase(fetchMe.pending, (state) => {
+        state.meLoading = true;
+      })
       .addCase(fetchMe.fulfilled, (state, action) => {
+        state.meLoading = false;
         state.user = action.payload;
       })
-      .addCase(fetchMe.rejected, (state) => {
+      .addCase(fetchMe.rejected, (state, action) => {
+        state.meLoading = false;
+        if (action.meta.condition) return; // appel simplement ignoré (doublon)
         state.user = null;
         state.token = null;
         if (typeof window !== "undefined") {

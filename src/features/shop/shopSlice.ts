@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "@/lib/axios";
+import { apiError } from "@/lib/errors";
 
 export interface Shop {
   id: number;
@@ -12,7 +13,7 @@ export interface Shop {
   stripe_account_id?: string | null;
   kyc_status?: "not_started" | "pending" | "verified";
   is_active?: boolean;
-  products?: any[];
+  products?: { id: number; nom: string; prix: string; stock: number; image: string | null; category: { id: number; nom: string } | null }[];
 }
 
 interface ShopState {
@@ -43,13 +44,8 @@ export const createShop = createAsyncThunk(
         headers: { "Content-Type": "multipart/form-data" },
       });
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.message ||
-        err.response?.data?.errors?.nom?.[0] ||
-        err.response?.data?.errors?.logo?.[0] ||
-        "Erreur lors de la création de la boutique"
-      );
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur lors de la création de la boutique"));
     }
   }
 );
@@ -60,7 +56,7 @@ export const fetchMyShop = createAsyncThunk(
     try {
       const response = await api.get("/shops/mine");
       return response.data;
-    } catch (err: any) {
+    } catch {
       return rejectWithValue(null); // pas de boutique = normal, pas une vraie erreur
     }
   }
@@ -84,10 +80,8 @@ export const updateShop = createAsyncThunk(
         headers: { "Content-Type": "multipart/form-data" },
       });
       return response.data;
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.message || "Erreur lors de la mise à jour de la boutique"
-      );
+    } catch (err) {
+      return rejectWithValue(apiError(err, "Erreur lors de la mise à jour de la boutique"));
     }
   }
 );

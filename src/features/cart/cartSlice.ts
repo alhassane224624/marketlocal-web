@@ -8,6 +8,7 @@ export interface CartItem {
   stock: number;
   shop_nom: string;
   image?: string;
+  categorie?: string;
 }
 
 interface CartState {
@@ -33,14 +34,20 @@ const saveToStorage = (items: CartItem[]) => {
   }
 };
 
+// Vide au rendu serveur : le panier sauvegardé est relu côté client par
+// hydrateCart (voir providers.tsx), sinon le badge du panier différerait
+// entre le HTML du serveur et le premier rendu du navigateur.
 const initialState: CartState = {
-  items: loadFromStorage(),
+  items: [],
 };
 
 const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
+    hydrateCart: (state) => {
+      state.items = loadFromStorage();
+    },
     addToCart: (state, action: PayloadAction<Omit<CartItem, "quantite">>) => {
       const existing = state.items.find(
         (item) => item.product_id === action.payload.product_id
@@ -76,6 +83,6 @@ const cartSlice = createSlice({
   },
 });
 
-export const { addToCart, incrementQuantity, decrementQuantity, removeFromCart, clearCart } =
+export const { hydrateCart, addToCart, incrementQuantity, decrementQuantity, removeFromCart, clearCart } =
   cartSlice.actions;
 export default cartSlice.reducer;

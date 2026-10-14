@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { Package, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
+import { useAppDispatch } from "@/lib/hooks";
 import { fetchMyShop } from "@/features/shop/shopSlice";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Pencil, Trash2, Plus, Search, Package } from "lucide-react";
+import { ProductVisual } from "@/components/MarketLocalUI";
+import { Alert, apiError, Badge, ButtonLink, Card, EmptyState, LoadingRows, money, PageHeader, Segmented } from "@/components/ui";
 
 interface Product {
   id: number;
@@ -14,172 +16,158 @@ interface Product {
   prix: string;
   stock: number;
   image: string | null;
-  category: { id: number; nom: string };
+  category: { id: number; nom: string } | null;
 }
+
+type StockFilter = "all" | "low" | "out";
 
 export default function MesProduitsPage() {
   const dispatch = useAppDispatch();
-  const { shop } = useAppSelector((state) => state.shop);
   const [products, setProducts] = useState<Product[]>([]);
+  const [hasShop, setHasShop] = useState(true);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-
-  const loadShop = async () => {
-    setLoading(true);
-    const result = await dispatch(fetchMyShop());
-    if (fetchMyShop.fulfilled.match(result)) {
-      setProducts(result.payload.products || []);
-    }
-    setLoading(false);
-  };
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadShop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    dispatch(fetchMyShop()).then((result) => {
+      if (fetchMyShop.fulfilled.match(result)) setProducts(result.payload.products || []);
+      else setHasShop(false);
+      setLoading(false);
+    });
+  }, [dispatch]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Supprimer ce produit ?")) return;
-    setDeletingId(id);
+  const remove = async (product: Product) => {
+    if (!confirm(`Supprimer « ${product.nom} » ? Les commandes passées restent consultables.`)) return;
+    setDeletingId(product.id);
+    setError("");
     try {
-      await api.delete(`/products/${id}`);
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      alert("Erreur lors de la suppression.");
+      await api.delete(`/products/${product.id}`);
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    } catch (err) {
+      setError(apiError(err, "Erreur lors de la suppression."));
     } finally {
       setDeletingId(null);
     }
   };
 
-  const filtered = products.filter((p) =>
-    p.nom.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products
+    .filter((p) => p.nom.toLowerCase().includes(search.toLowerCase()))
+    .filter((p) => (stockFilter === "out" ? p.stock === 0 : stockFilter === "low" ? p.stock > 0 && p.stock < 5 : true));
 
-  if (!shop && !loading) {
+  if (!loading && !hasShop) {
     return (
       <DashboardLayout>
-        <p className="text-gray-500">
-          Vous devez d'abord créer une boutique.{" "}
-          <Link href="/shop/create" className="text-green-600 hover:underline">
-            Créer ma boutique
-          </Link>
-        </p>
+        <PageHeader eyebrow="Espace vendeur" title="Mes produits" />
+        <EmptyState icon={Store} title="Créez d’abord votre boutique" action={<ButtonLink href="/shop/create">Créer ma boutique</ButtonLink>} />
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-bold text-gray-800">Mes produits</h1>
-        <Link
-          href="/mes-produits/nouveau"
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition"
-        >
-          <Plus size={16} />
-          Ajouter un produit
-        </Link>
-      </div>
-      <p className="text-gray-500 mb-6">Gérez vos produits et votre stock</p>
+      <PageHeader
+        eyebrow="Espace vendeur"
+        title="Mes produits"
+        description={`${products.length} produit${products.length > 1 ? "s" : ""} dans votre boutique.`}
+        actions={
+          <ButtonLink href="/mes-produits/nouveau">
+            <Plus size={16} /> Ajouter un produit
+          </ButtonLink>
+        }
+      />
 
-      {/* Barre de recherche */}
-      <div className="relative w-80 max-w-full mb-5">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher un produit..."
-          className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-        />
-      </div>
+      {error && <Alert className="mb-4">{error}</Alert>}
 
-      {loading && (
-        <p className="text-gray-500 text-center py-12">Chargement...</p>
-      )}
+      {loading ? (
+        <LoadingRows rows={4} />
+      ) : products.length === 0 ? (
+        <EmptyState icon={Package} title="Aucun produit" description="Ajoutez votre premier produit pour apparaître dans le catalogue." action={<ButtonLink href="/mes-produits/nouveau">Ajouter un produit</ButtonLink>} />
+      ) : (
+        <Card>
+          <div className="flex flex-col gap-3 border-b border-sand-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <label className="relative block sm:w-72">
+              <span className="sr-only">Rechercher</span>
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher un produit…"
+                className="h-10 w-full rounded-xl border border-sand-300 bg-white pl-9 pr-3 text-sm focus:border-terra-400 focus:outline-none focus:ring-4 focus:ring-terra-100"
+              />
+            </label>
+            <Segmented<StockFilter>
+              options={[
+                { value: "all", label: "Tous", count: products.length },
+                { value: "low", label: "Stock faible", count: products.filter((p) => p.stock > 0 && p.stock < 5).length },
+                { value: "out", label: "Épuisés", count: products.filter((p) => p.stock === 0).length },
+              ]}
+              value={stockFilter}
+              onChange={setStockFilter}
+            />
+          </div>
 
-      {!loading && filtered.length === 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <Package className="mx-auto text-gray-300 mb-3" size={36} />
-          <p className="text-gray-500">
-            {search ? "Aucun produit ne correspond à votre recherche." : "Aucun produit ajouté pour le moment."}
-          </p>
-        </div>
-      )}
-
-      {!loading && filtered.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-left border-b border-gray-100">
-              <tr>
-                <th className="px-5 py-3 font-medium">Image</th>
-                <th className="px-5 py-3 font-medium">Nom du produit</th>
-                <th className="px-5 py-3 font-medium">Prix</th>
-                <th className="px-5 py-3 font-medium">Stock</th>
-                <th className="px-5 py-3 font-medium">Statut</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50 transition">
-                  <td className="px-5 py-3">
-                    <div className="w-11 h-11 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                      {product.image ? (
-                        <img
-                          src={product.image}
-                          alt={product.nom}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package size={18} className="text-gray-300" />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-gray-800">{product.nom}</p>
-                    <p className="text-xs text-gray-400">{product.category.nom}</p>
-                  </td>
-                  <td className="px-5 py-3 font-semibold text-gray-700">
-                    {parseFloat(product.prix).toFixed(2)} MAD
-                  </td>
-                  <td className="px-5 py-3 text-gray-600">{product.stock}</td>
-                  <td className="px-5 py-3">
-                    {product.stock > 0 ? (
-                      <span className="text-xs font-medium bg-green-100 text-green-700 px-2.5 py-1 rounded-full">
-                        Actif
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium bg-red-100 text-red-700 px-2.5 py-1 rounded-full">
-                        En rupture
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/mes-produits/${product.id}`}
-                        className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
-                        title="Modifier"
-                      >
-                        <Pencil size={16} />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        disabled={deletingId === product.id}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {filtered.length === 0 ? (
+            <p className="p-10 text-center text-sm text-ink-500">Aucun produit ne correspond.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-sand-100 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">
+                    <th className="px-5 py-3 font-semibold">Produit</th>
+                    <th className="px-5 py-3 font-semibold">Catégorie</th>
+                    <th className="px-5 py-3 text-right font-semibold">Prix</th>
+                    <th className="px-5 py-3 font-semibold">Stock</th>
+                    <th className="px-5 py-3"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand-100">
+                  {filtered.map((p) => (
+                    <tr key={p.id} className="transition hover:bg-sand-50">
+                      <td className="px-5 py-3">
+                        <Link href={`/mes-produits/${p.id}`} className="flex items-center gap-3">
+                          <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+                            <ProductVisual product={p} />
+                          </span>
+                          <span className="font-semibold text-ink-900 hover:text-terra-700">{p.nom}</span>
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3 text-ink-600">{p.category?.nom || "—"}</td>
+                      <td className="px-5 py-3 text-right font-semibold tabular-nums">{money(p.prix)}</td>
+                      <td className="px-5 py-3">
+                        {p.stock === 0 ? (
+                          <Badge tone="red">Épuisé</Badge>
+                        ) : p.stock < 5 ? (
+                          <Badge tone="saffron">{p.stock} restants</Badge>
+                        ) : (
+                          <span className="tabular-nums text-ink-700">{p.stock}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end gap-1">
+                          <Link href={`/mes-produits/${p.id}`} className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-sand-100 hover:text-ink-900" aria-label={`Modifier ${p.nom}`}>
+                            <Pencil size={16} />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => remove(p)}
+                            disabled={deletingId === p.id}
+                            className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                            aria-label={`Supprimer ${p.nom}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
     </DashboardLayout>
   );
