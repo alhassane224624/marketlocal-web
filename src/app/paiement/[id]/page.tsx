@@ -85,17 +85,25 @@ export default function PaiementPage() {
   const [secret, setSecret] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderSummary | null>(null);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     api
       .post(`/orders/${id}/payer`)
       .then((r) => setSecret(r.data.client_secret))
-      .catch((e) => setError(apiError(e, "Impossible d’initialiser le paiement.")));
+      .catch((e) => {
+        // Déjà payée (webhook en retard) : l'API vient de valider la commande, on affiche le suivi.
+        if (e?.response?.data?.paid) {
+          router.replace(`/commandes/${id}`);
+          return;
+        }
+        setError(apiError(e, "Impossible d’initialiser le paiement."));
+      });
     api
       .get(`/orders/${id}`)
       .then((r) => setOrder(r.data))
       .catch(() => {});
-  }, [id]);
+  }, [id, router]);
 
   return (
     <SiteShell footer={false}>
