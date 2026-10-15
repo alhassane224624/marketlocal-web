@@ -40,13 +40,34 @@ export function StarMark({ className, hole = true }: { className?: string; hole?
   );
 }
 
+/** Monogramme « AD » (Alhassane Diané) : lettres Fraunces italique vectorisées, étoile en accent. */
+const AD_TRANSFORM = "translate(13.79 42.46) scale(0.01329 -0.01329)";
+const AD_A = "M284 283Q242 212 250.0 167.5Q258 123 302 107L348 96Q367 88 375.5 76.5Q384 65 384 52Q384 28 366.0 14.0Q348 0 317 0H4Q-28 0 -44.0 12.0Q-60 24 -60 46Q-60 66 -46.5 81.5Q-33 97 4 115Q41 130 81.0 178.0Q121 226 162 298L633 1068Q754 1250 883.0 1336.5Q1012 1423 1148 1423Q1199 1423 1220.0 1408.5Q1241 1394 1241 1371Q1241 1354 1232.5 1342.5Q1224 1331 1205 1322Q1164 1308 1140.5 1275.0Q1117 1242 1116 1179Q1116 1143 1114.5 1081.0Q1113 1019 1111.5 940.5Q1110 862 1108.5 775.0Q1107 688 1105.5 602.0Q1104 516 1103.0 440.0Q1102 364 1102 307V222Q1102 187 1108.5 164.5Q1115 142 1132.5 126.5Q1150 111 1183 96Q1214 79 1214 50Q1214 29 1197.0 14.5Q1180 0 1148 0H704Q675 0 663.0 13.0Q651 26 651.0 45.0Q651 64 663.5 77.0Q676 90 700 99L757 112Q788 122 803.0 149.0Q818 176 819 219Q820 255 821 316Q822 375 824 451H385ZM827 539Q828 578 829 620Q831 707 833.0 795.5Q835 884 836.5 965.5Q838 1047 840 1114Q840 1139 840 1160Q821 1141 799 1115Q766 1077 723 1013L438 539Z";
+const AD_D = "M13 45Q13 63 26.5 77.0Q40 91 63 97L118 109Q135 113 148.0 123.5Q161 134 173.0 156.5Q185 179 197 219Q208 262 226.5 330.0Q245 398 267 481L313 653Q337 743 361.0 831.0Q385 919 404.5 996.5Q424 1074 438.5 1133.5Q453 1193 459 1224Q467 1254 459.5 1269.5Q452 1285 427 1291L376 1305Q354 1312 344.0 1322.0Q334 1332 334 1349Q334 1372 351.0 1386.0Q368 1400 403 1400H928Q1075 1400 1193.5 1351.0Q1312 1302 1391.5 1210.0Q1471 1118 1501.5 988.5Q1532 859 1503 697Q1472 530 1393.5 400.0Q1315 270 1199.0 181.5Q1083 93 939.0 46.5Q795 0 631 0H69Q37 0 25.0 13.0Q13 26 13 45ZM647 102Q742 102 827.0 138.5Q912 175 983.5 250.0Q1055 325 1107.5 437.5Q1160 550 1188 702Q1217 854 1206.5 966.5Q1196 1079 1155.5 1153.5Q1115 1228 1055.5 1265.0Q996 1302 926 1302H857Q819 1302 793.5 1278.0Q768 1254 750 1200Q742 1167 726.0 1107.0Q710 1047 688.5 969.5Q667 892 643.0 805.5Q619 719 595.5 632.0Q572 545 551.5 465.5Q531 386 516.0 322.5Q501 259 495 221Q484 160 501.5 131.0Q519 102 566 102Z";
+
+export function ADMark({ className, inverted = false }: { className?: string; inverted?: boolean }) {
+  const bg = inverted ? "#fbf8f3" : "#1f1a16";
+  const a = inverted ? "#1f1a16" : "#fbf8f3";
+  const d = inverted ? "#c45c32" : "#e39770";
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
+      <rect width="64" height="64" rx="18" fill={bg} />
+      <g transform={AD_TRANSFORM}>
+        <path transform="translate(0 0)" d={AD_A} fill={a} />
+        <path transform="translate(1283 0)" d={AD_D} fill={d} />
+      </g>
+      <path d="M50 9l1.7 4.2L56 15l-4.3 1.8L50 21l-1.7-4.2L44 15l4.3-1.8z" fill={d} />
+    </svg>
+  );
+}
+
 export function Logo({ inverted = false, compact = false }: { inverted?: boolean; compact?: boolean }) {
   return (
-    <Link href="/" className="group inline-flex items-center gap-2.5" aria-label="MarketLocal, accueil">
-      <StarMark className="h-8 w-8 text-terra-500 transition-transform duration-500 group-hover:rotate-45" />
+    <Link href="/" className="group inline-flex items-center gap-2.5" aria-label="AD MarketLocal, accueil">
+      <ADMark inverted={inverted} className="h-9 w-9 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105" />
       {!compact && (
         <span className={cn("font-display text-[1.35rem] font-semibold leading-none", inverted ? "text-sand-50" : "text-ink-900")}>
-          Market<span className="italic text-terra-500">Local</span>
+          <span className={inverted ? "text-terra-300" : "text-terra-600"}>AD</span> Market<span className="italic text-terra-500">Local</span>
         </span>
       )}
     </Link>
