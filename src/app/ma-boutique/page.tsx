@@ -42,13 +42,14 @@ export default function MaBoutiquePage() {
     dispatch(fetchMyShop()).finally(() => setLoaded(true));
   }, [dispatch]);
 
-  const save = async (values: { nom: string; description: string; logo: File | null }) => {
+  const save = async (values: { nom: string; description: string; activite: string; logo: File | null }) => {
     setSaving(true);
     setSaveError(null);
     try {
       const formData = new FormData();
       formData.append("nom", values.nom);
       formData.append("description", values.description);
+      formData.append("activite", values.activite);
       if (values.logo) formData.append("logo", values.logo);
       formData.append("_method", "PUT"); // Laravel ne lit pas le multipart en PUT
       await api.post("/shops/mine", formData, { headers: { "Content-Type": "multipart/form-data" } });
@@ -125,6 +126,19 @@ export default function MaBoutiquePage() {
         }
       />
 
+      {shop.statut === "en_attente" && (
+        <Alert tone="info" className="mb-6">
+          Votre demande est en cours d’examen par l’équipe MarketLocal. Vous pourrez publier vos produits dès qu’elle sera validée.
+        </Alert>
+      )}
+      {shop.statut === "refuse" && (
+        <Alert className="mb-6">
+          <span className="font-semibold">Demande refusée.</span>{" "}
+          {shop.motif_refus ? `Motif : ${shop.motif_refus}` : "Contactez l’équipe pour en savoir plus."}{" "}
+          Cliquez sur « Modifier » pour corriger votre demande : elle sera renvoyée automatiquement.
+        </Alert>
+      )}
+
       {/* Vitrine */}
       <Card className="overflow-hidden">
         <div className="zellige h-28 bg-terra-100" />
@@ -148,9 +162,9 @@ export default function MaBoutiquePage() {
           {editing ? (
             <div className="mt-6 max-w-2xl">
               <ShopForm
-                initial={{ nom: shop.nom, description: shop.description }}
+                initial={{ nom: shop.nom, description: shop.description, activite: shop.activite }}
                 currentLogo={shop.logo}
-                submitLabel="Enregistrer"
+                submitLabel={shop.statut === "refuse" ? "Corriger et renvoyer ma demande" : "Enregistrer"}
                 loading={saving}
                 error={saveError}
                 onSubmit={save}
@@ -166,13 +180,19 @@ export default function MaBoutiquePage() {
               <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-600">
                 {shop.description || "Ajoutez une présentation pour donner envie aux acheteurs."}
               </p>
+              {shop.activite && (
+                <div className="mt-4 max-w-2xl rounded-xl bg-sand-100 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">Votre demande · ce que vous vendez</p>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-700">{shop.activite}</p>
+                </div>
+              )}
             </>
           )}
         </div>
       </Card>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Produits" value={products.length} icon={Package} tone="terra" hint={`${products.filter((p: { stock: number }) => p.stock === 0).length} en rupture`} />
+        <StatCard label="Produits" value={products.length} icon={Package} tone="terra" hint={`${products.filter((p) => p.stock === 0).length} en rupture · ${products.filter((p) => p.en_vente === false).length} retiré(s)`} />
         <StatCard label="Commission plateforme" value={`${Number(shop.commission ?? 10)} %`} icon={Percent} tone="ink" hint="Prélevée sur chaque vente" />
         <StatCard label="Paiements" value={kyc.label} icon={CreditCard} tone={kyc.tone === "olive" ? "olive" : "saffron"} />
       </div>

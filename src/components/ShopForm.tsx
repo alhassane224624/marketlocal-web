@@ -7,8 +7,11 @@ import { Alert, Button, Field, Input, Textarea } from "./ui";
 export interface ShopFormValues {
   nom: string;
   description: string;
+  activite: string;
   logo: File | null;
 }
+
+const ACTIVITE_MIN = 30;
 
 /** Formulaire boutique partagé : création et modification. */
 export default function ShopForm({
@@ -20,7 +23,7 @@ export default function ShopForm({
   onSubmit,
   onCancel,
 }: {
-  initial?: { nom: string; description: string | null };
+  initial?: { nom: string; description: string | null; activite?: string | null };
   currentLogo?: string | null;
   submitLabel: string;
   loading: boolean;
@@ -30,6 +33,7 @@ export default function ShopForm({
 }) {
   const [nom, setNom] = useState(initial?.nom || "");
   const [description, setDescription] = useState(initial?.description || "");
+  const [activite, setActivite] = useState(initial?.activite || "");
   const [logo, setLogo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -45,7 +49,7 @@ export default function ShopForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({ nom, description, logo });
+        onSubmit({ nom, description, activite: activite.trim(), logo });
       }}
       className="space-y-6"
     >
@@ -70,6 +74,21 @@ export default function ShopForm({
       </Field>
       <Field label="Présentation" hint="Votre savoir-faire, vos matières, votre région : c’est ce que liront les acheteurs.">
         <Textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Décrivez votre atelier et vos produits…" />
+      </Field>
+
+      <Field
+        label="Ce que vous voulez vendre"
+        hint={`Pour l’équipe MarketLocal, qui valide votre boutique : types de produits, fabrication (main, coopérative…), provenance, gamme de prix. ${activite.trim().length}/${ACTIVITE_MIN} caractères minimum.`}
+      >
+        <Textarea
+          required
+          minLength={ACTIVITE_MIN}
+          maxLength={2000}
+          rows={4}
+          value={activite}
+          onChange={(e) => setActivite(e.target.value)}
+          placeholder="Ex. Je tisse des tapis berbères en laine naturelle à Khénifra, de 300 à 2 000 MAD, et des coussins assortis."
+        />
       </Field>
 
       {error && <Alert>{error}</Alert>}

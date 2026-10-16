@@ -13,6 +13,8 @@ export interface Product {
   description: string | null;
   prix: string;
   stock: number;
+  /** false : retiré de la vente par le vendeur (invisible dans le catalogue). */
+  en_vente?: boolean;
   image: string | null;
   note_moyenne?: number | null;
   nombre_avis?: number;

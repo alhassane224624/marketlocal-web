@@ -26,7 +26,9 @@ interface Shop {
   id: number;
   nom: string;
   description: string | null;
+  activite?: string | null;
   statut: string;
+  motif_refus?: string | null;
   commission: string;
   is_active?: boolean;
   created_at?: string;
@@ -49,6 +51,8 @@ export default function AdminBoutiquesPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [refusing, setRefusing] = useState<number | null>(null);
+  const [motif, setMotif] = useState("");
 
   const load = () =>
     api
@@ -78,6 +82,13 @@ export default function AdminBoutiquesPage() {
     run(id, async () => {
       await api.put(`/admin/shops/${id}/commission`, { commission: Number(value) });
       setEditing(null);
+    });
+
+  const refuse = (id: number) =>
+    run(id, async () => {
+      await api.put(`/admin/shops/${id}/refuser`, { motif: motif.trim() });
+      setRefusing(null);
+      setMotif("");
     });
 
   const filtered = shops
@@ -122,7 +133,16 @@ export default function AdminBoutiquesPage() {
                       {shop.user.name} · {shop.user.email}
                       {shop.created_at && ` · depuis le ${formatDate(shop.created_at)}`}
                     </p>
+                    {shop.activite && (
+                      <div className="mt-3 max-w-2xl rounded-xl bg-sand-100 px-4 py-3">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-500">Ce que le vendeur veut vendre</p>
+                        <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-800">{shop.activite}</p>
+                      </div>
+                    )}
                     {shop.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm text-ink-600">{shop.description}</p>}
+                    {shop.statut === "refuse" && shop.motif_refus && (
+                      <p className="mt-2 max-w-2xl text-sm text-red-700">Motif du refus : {shop.motif_refus}</p>
+                    )}
                   </div>
                 </div>
 
@@ -172,7 +192,14 @@ export default function AdminBoutiquesPage() {
                       <Button size="sm" variant="success" onClick={() => run(shop.id, () => api.put(`/admin/shops/${shop.id}/valider`))} loading={busy === shop.id}>
                         Valider
                       </Button>
-                      <Button size="sm" variant="danger" onClick={() => run(shop.id, () => api.put(`/admin/shops/${shop.id}/refuser`))}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          setRefusing(shop.id);
+                          setMotif("");
+                        }}
+                      >
                         Refuser
                       </Button>
                     </>
@@ -184,6 +211,34 @@ export default function AdminBoutiquesPage() {
                   )}
                 </div>
               </div>
+
+              {refusing === shop.id && (
+                <form
+                  className="mt-4 flex flex-col gap-2 border-t border-sand-100 pt-4 sm:flex-row sm:items-end"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    refuse(shop.id);
+                  }}
+                >
+                  <label className="flex-1">
+                    <span className="mb-1 block text-[13px] font-semibold text-ink-700">Motif du refus (envoyé au vendeur)</span>
+                    <input
+                      required
+                      minLength={5}
+                      maxLength={500}
+                      value={motif}
+                      onChange={(e) => setMotif(e.target.value)}
+                      placeholder="Ex. Précisez les produits et leur provenance."
+                      className={cn(inputClass, "h-10 w-full")}
+                      autoFocus
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" variant="danger" loading={busy === shop.id}>Confirmer le refus</Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setRefusing(null)}>Annuler</Button>
+                  </div>
+                </form>
+              )}
             </Card>
           ))}
         </div>

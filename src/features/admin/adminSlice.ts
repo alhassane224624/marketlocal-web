@@ -17,7 +17,9 @@ export interface ShopAdmin {
   id: number;
   nom: string;
   description: string | null;
+  activite?: string | null;
   statut: "en_attente" | "valide" | "refuse";
+  motif_refus?: string | null;
   commission?: string;
   is_active?: boolean;
   kyc_status?: string;
@@ -57,8 +59,8 @@ export const validateShop = createAsyncThunk(
 
 export const refuseShop = createAsyncThunk(
   "admin/refuseShop",
-  async (shopId: number) => {
-    const response = await api.put(`/admin/shops/${shopId}/refuser`);
+  async ({ shopId, motif }: { shopId: number; motif: string }) => {
+    const response = await api.put(`/admin/shops/${shopId}/refuser`, { motif });
     return response.data;
   }
 );

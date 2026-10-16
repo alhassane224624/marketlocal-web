@@ -7,13 +7,17 @@ export interface Shop {
   user_id: number;
   nom: string;
   description: string | null;
+  /** Ce que le vendeur veut vendre (lu par l'admin avant validation). */
+  activite?: string | null;
   logo: string | null;
   statut: "en_attente" | "valide" | "refuse";
+  motif_refus?: string | null;
+  valide_at?: string | null;
   commission?: string;
   stripe_account_id?: string | null;
   kyc_status?: "not_started" | "pending" | "verified";
   is_active?: boolean;
-  products?: { id: number; nom: string; prix: string; stock: number; image: string | null; category: { id: number; nom: string } | null }[];
+  products?: { id: number; nom: string; prix: string; stock: number; en_vente?: boolean; image: string | null; category: { id: number; nom: string } | null }[];
 }
 
 interface ShopState {
@@ -31,13 +35,14 @@ const initialState: ShopState = {
 export const createShop = createAsyncThunk(
   "shop/create",
   async (
-    data: { nom: string; description?: string; logo?: File | null },
+    data: { nom: string; description?: string; activite: string; logo?: File | null },
     { rejectWithValue }
   ) => {
     try {
       const formData = new FormData();
       formData.append("nom", data.nom);
       if (data.description) formData.append("description", data.description);
+      formData.append("activite", data.activite);
       if (data.logo) formData.append("logo", data.logo);
 
       const response = await api.post("/shops", formData, {
@@ -65,13 +70,14 @@ export const fetchMyShop = createAsyncThunk(
 export const updateShop = createAsyncThunk(
   "shop/update",
   async (
-    data: { nom?: string; description?: string; logo?: File | null },
+    data: { nom?: string; description?: string; activite?: string; logo?: File | null },
     { rejectWithValue }
   ) => {
     try {
       const formData = new FormData();
       if (data.nom) formData.append("nom", data.nom);
       if (data.description !== undefined) formData.append("description", data.description);
+      if (data.activite !== undefined) formData.append("activite", data.activite);
       if (data.logo) formData.append("logo", data.logo);
       // Method spoofing : Laravel ne parse pas le corps multipart des requêtes PUT.
       formData.append("_method", "PUT");

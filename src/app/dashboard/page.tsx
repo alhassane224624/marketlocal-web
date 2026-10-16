@@ -22,7 +22,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { fetchMe } from "@/features/auth/authSlice";
 import { fetchMyShop } from "@/features/shop/shopSlice";
-import { fetchAllShops, fetchStats, refuseShop, validateShop } from "@/features/admin/adminSlice";
+import { fetchAllShops, fetchStats, validateShop } from "@/features/admin/adminSlice";
 import api from "@/lib/axios";
 import { deliveryLabel, isActiveDelivery, type Delivery } from "@/lib/deliveries";
 import { itemsTotal, readyToShip, shopStatut } from "@/lib/orders";
@@ -384,10 +384,10 @@ function Admin() {
                       <p className="truncate text-xs text-ink-500">{s.user.name} · {s.user.email}</p>
                     </div>
                   </div>
-                  {s.description && <p className="mt-2 line-clamp-2 text-sm text-ink-600">{s.description}</p>}
+                  {(s.activite || s.description) && <p className="mt-2 line-clamp-2 text-sm text-ink-600">{s.activite || s.description}</p>}
                   <div className="mt-3 flex gap-2">
                     <Button size="sm" variant="success" onClick={() => dispatch(validateShop(s.id)).then(() => dispatch(fetchStats()))}>Valider</Button>
-                    <Button size="sm" variant="danger" onClick={() => dispatch(refuseShop(s.id)).then(() => dispatch(fetchStats()))}>Refuser</Button>
+                    <ButtonLink size="sm" variant="outline" href="/admin/commissions">Examiner / refuser</ButtonLink>
                   </div>
                 </li>
               ))}

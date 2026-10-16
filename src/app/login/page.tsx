@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Bike, Check, Copy, ShieldCheck, ShoppingBag, Store } from "lucide-react";
+import { ArrowRight, Bike, Check, Copy, Loader2, ShieldCheck, ShoppingBag, Store } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { login } from "@/features/auth/authSlice";
 import AuthLayout from "@/components/AuthLayout";
@@ -33,16 +33,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [demoLoading, setDemoLoading] = useState<string | null>(null);
+
+  const connect = async (loginEmail: string, loginPassword: string) => {
+    const r = await dispatch(login({ email: loginEmail, password: loginPassword }));
+    if (login.fulfilled.match(r)) router.push(safeRedirect());
+    return r;
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = await dispatch(login({ email, password }));
-    if (login.fulfilled.match(r)) router.push(safeRedirect());
+    await connect(email, password);
   };
 
-  const fillAccount = (accountEmail: string) => {
+  // Clic sur un compte de démo : on remplit le formulaire, on remonte en haut
+  // (pour voir une éventuelle erreur) et on se connecte directement.
+  const loginWithDemo = async (accountEmail: string) => {
+    if (status === "loading") return;
     setEmail(accountEmail);
     setPassword(DEMO_PASSWORD);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setDemoLoading(accountEmail);
+    try {
+      await connect(accountEmail, DEMO_PASSWORD);
+    } finally {
+      setDemoLoading(null);
+    }
   };
 
   const copy = async (value: string) => {
@@ -92,7 +108,7 @@ export default function LoginPage() {
               </button>
             </p>
           </div>
-          <p className="mt-1 text-xs text-ink-500">Cliquez sur un compte pour remplir le formulaire.</p>
+          <p className="mt-1 text-xs text-ink-500">Cliquez sur un compte pour vous connecter directement.</p>
 
           <ul className="mt-4 space-y-2">
             {demoAccounts.map((account) => {
@@ -102,9 +118,11 @@ export default function LoginPage() {
                 <li key={account.email}>
                   <button
                     type="button"
-                    onClick={() => fillAccount(account.email)}
+                    onClick={() => loginWithDemo(account.email)}
+                    disabled={status === "loading"}
+                    aria-label={`Se connecter en tant que ${account.role}`}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
+                      "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition disabled:cursor-wait disabled:opacity-70",
                       selected ? "border-terra-400 bg-terra-50/60" : "border-sand-200 hover:border-sand-300 hover:bg-sand-50",
                     )}
                   >
@@ -116,10 +134,12 @@ export default function LoginPage() {
                       <span className="mt-0.5 block break-all font-mono text-[13px] text-ink-700">{account.email}</span>
                       <span className="mt-0.5 block text-xs text-ink-500">{account.text}</span>
                     </span>
-                    {selected ? (
+                    {demoLoading === account.email ? (
+                      <Loader2 size={18} className="shrink-0 animate-spin text-terra-600" />
+                    ) : selected ? (
                       <Check size={18} className="shrink-0 text-terra-600" />
                     ) : (
-                      <span className="hidden shrink-0 text-xs font-semibold text-terra-700 sm:block">Utiliser</span>
+                      <span className="hidden shrink-0 text-xs font-semibold text-terra-700 sm:block">Se connecter</span>
                     )}
                   </button>
                 </li>

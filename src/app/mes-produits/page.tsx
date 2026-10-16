@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Package, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
 import { useAppDispatch } from "@/lib/hooks";
 import { fetchMyShop } from "@/features/shop/shopSlice";
 import api from "@/lib/axios";
@@ -15,11 +15,14 @@ interface Product {
   nom: string;
   prix: string;
   stock: number;
+  en_vente?: boolean;
   image: string | null;
   category: { id: number; nom: string } | null;
 }
 
-type StockFilter = "all" | "low" | "out";
+type StockFilter = "all" | "low" | "out" | "off";
+
+const isOnSale = (p: Product) => p.en_vente !== false;
 
 export default function MesProduitsPage() {
   const dispatch = useAppDispatch();
@@ -27,6 +30,7 @@ export default function MesProduitsPage() {
   const [hasShop, setHasShop] = useState(true);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [error, setError] = useState("");
@@ -53,9 +57,26 @@ export default function MesProduitsPage() {
     }
   };
 
+  // Retirer de la vente (rupture, saison…) sans supprimer : le produit disparaît du catalogue.
+  const toggleSale = async (product: Product) => {
+    const next = !isOnSale(product);
+    setTogglingId(product.id);
+    setError("");
+    try {
+      await api.put(`/products/${product.id}/vente`, { en_vente: next });
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, en_vente: next } : p)));
+    } catch (err) {
+      setError(apiError(err, "Impossible de modifier la mise en vente."));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const filtered = products
     .filter((p) => p.nom.toLowerCase().includes(search.toLowerCase()))
-    .filter((p) => (stockFilter === "out" ? p.stock === 0 : stockFilter === "low" ? p.stock > 0 && p.stock < 5 : true));
+    .filter((p) =>
+      stockFilter === "off" ? !isOnSale(p) : stockFilter === "out" ? p.stock === 0 : stockFilter === "low" ? p.stock > 0 && p.stock < 5 : true,
+    );
 
   if (!loading && !hasShop) {
     return (
@@ -103,6 +124,7 @@ export default function MesProduitsPage() {
                 { value: "all", label: "Tous", count: products.length },
                 { value: "low", label: "Stock faible", count: products.filter((p) => p.stock > 0 && p.stock < 5).length },
                 { value: "out", label: "Épuisés", count: products.filter((p) => p.stock === 0).length },
+                { value: "off", label: "Retirés", count: products.filter((p) => !isOnSale(p)).length },
               ]}
               value={stockFilter}
               onChange={setStockFilter}
@@ -113,19 +135,20 @@ export default function MesProduitsPage() {
             <p className="p-10 text-center text-sm text-ink-500">Aucun produit ne correspond.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-sand-100 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">
                     <th className="px-5 py-3 font-semibold">Produit</th>
                     <th className="px-5 py-3 font-semibold">Catégorie</th>
                     <th className="px-5 py-3 text-right font-semibold">Prix</th>
                     <th className="px-5 py-3 font-semibold">Stock</th>
+                    <th className="px-5 py-3 font-semibold">Vente</th>
                     <th className="px-5 py-3"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-100">
                   {filtered.map((p) => (
-                    <tr key={p.id} className="transition hover:bg-sand-50">
+                    <tr key={p.id} className={`transition hover:bg-sand-50 ${isOnSale(p) ? "" : "bg-sand-50/70"}`}>
                       <td className="px-5 py-3">
                         <Link href={`/mes-produits/${p.id}`} className="flex items-center gap-3">
                           <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
@@ -146,7 +169,20 @@ export default function MesProduitsPage() {
                         )}
                       </td>
                       <td className="px-5 py-3">
+                        {isOnSale(p) ? <Badge tone="olive">En vente</Badge> : <Badge tone="ink">Retiré</Badge>}
+                      </td>
+                      <td className="px-5 py-3">
                         <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleSale(p)}
+                            disabled={togglingId === p.id}
+                            title={isOnSale(p) ? "Retirer de la vente" : "Remettre en vente"}
+                            aria-label={isOnSale(p) ? `Retirer ${p.nom} de la vente` : `Remettre ${p.nom} en vente`}
+                            className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-sand-100 hover:text-ink-900 disabled:opacity-40"
+                          >
+                            {isOnSale(p) ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
                           <Link href={`/mes-produits/${p.id}`} className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-sand-100 hover:text-ink-900" aria-label={`Modifier ${p.nom}`}>
                             <Pencil size={16} />
                           </Link>
