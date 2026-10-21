@@ -6,6 +6,7 @@ import { Banknote, Bike, CheckCircle2, CreditCard, RotateCcw, ShieldAlert } from
 import api from "@/lib/axios";
 import { timeOf, type Delivery } from "@/lib/deliveries";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Alert, apiError, Badge, Button, Card, EmptyState, LoadingRows, money, PageHeader, Textarea } from "@/components/ui";
 
 type Litige = Delivery & { acheteur: { name: string; email: string } | null; remboursable: number };
@@ -84,13 +85,26 @@ function LitigeCard({ litige: l, onDone, onError }: { litige: Litige; onDone: (t
   const [payerLivreur, setPayerLivreur] = useState(true);
   const [busy, setBusy] = useState<"livreur" | "rembourser" | null>(null);
   const carte = l.mode_paiement === "carte";
+  const [confirm, confirmDialog] = useConfirm();
 
   const resolve = async (decision: "livreur" | "rembourser") => {
-    const question =
+    const ok = await confirm(
       decision === "rembourser"
-        ? `Rembourser ${money(l.remboursable)} à ${l.acheteur?.name || "l’acheteur"}${carte ? " sur sa carte (Stripe)" : " (en dehors de la plateforme, payé en espèces)"} ?`
-        : "Clore le litige en faveur du livreur ?";
-    if (!confirm(question)) return;
+        ? {
+            title: `Rembourser ${money(l.remboursable)} à ${l.acheteur?.name || "l’acheteur"} ?`,
+            description: carte
+              ? `Remboursement automatique sur sa carte (Stripe) ; la part du vendeur est reprise. ${payerLivreur ? `Le livreur reste payé (${money(l.remuneration_livreur)}).` : "Le livreur ne sera pas payé pour cette course."} Décision définitive.`
+              : `Payé en espèces : remboursez le client en dehors de la plateforme, la décision est enregistrée. ${payerLivreur ? `Le livreur reste payé (${money(l.remuneration_livreur)}).` : "Le livreur ne sera pas payé pour cette course."} Décision définitive.`,
+            confirmLabel: "Rembourser le client",
+            tone: "danger",
+          }
+        : {
+            title: "Donner raison au livreur ?",
+            description: "Le litige est clos, la livraison est considérée comme réussie et le livreur sera payé. Décision définitive.",
+            confirmLabel: "Clore le litige",
+          },
+    );
+    if (!ok) return;
     setBusy(decision);
     try {
       await api.post(`/admin/litiges/${l.id}/resoudre`, { decision, note: note || null, payer_livreur: payerLivreur });
@@ -104,6 +118,7 @@ function LitigeCard({ litige: l, onDone, onError }: { litige: Litige; onDone: (t
 
   return (
     <Card className="border-red-200 p-5 sm:p-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link href={`/commandes/${l.order_id}`} className="font-display text-xl font-semibold text-ink-900 hover:text-terra-700">Commande #{l.order_id}</Link>

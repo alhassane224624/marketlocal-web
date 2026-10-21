@@ -18,7 +18,7 @@ export interface Product {
   image: string | null;
   note_moyenne?: number | null;
   nombre_avis?: number;
-  shop: { id: number; nom: string };
+  shop: { id: number; nom: string; logo?: string | null };
   category: { id: number; nom: string };
   category_id?: number;
   categories?: { id: number; nom: string }[];
@@ -54,6 +54,8 @@ export const fetchProducts = createAsyncThunk(
       prix_max?: number;
       q?: string;
       page?: number;
+      tri?: "recent" | "prix_asc" | "prix_desc" | "note";
+      en_stock?: 1;
     } = {}
   ) => {
     const response = await api.get("/products", { params });

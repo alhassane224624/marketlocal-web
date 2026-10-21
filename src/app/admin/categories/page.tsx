@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, FolderTree, Pencil, Plus, Trash2, X } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { categoryStyle } from "@/components/MarketLocalUI";
 import { Alert, apiError, Button, Card, cn, EmptyState, Input, LoadingRows, PageHeader } from "@/components/ui";
 
@@ -46,17 +47,26 @@ export default function AdminCategoriesPage() {
     if (await run(() => api.post("/admin/categories", { nom: name }), "Création impossible.")) setName("");
   };
 
+  const [confirm, confirmDialog] = useConfirm();
+
   const update = async (id: number) => {
     if (await run(() => api.put(`/admin/categories/${id}`, { nom: editName }), "Modification impossible.")) setEditing(null);
   };
 
-  const remove = (category: Category) => {
-    if (!confirm(`Supprimer la catégorie « ${category.nom} » ?`)) return;
+  const remove = async (category: Category) => {
+    const ok = await confirm({
+      title: `Supprimer la catégorie « ${category.nom} » ?`,
+      description: "Elle disparaît du catalogue. Une catégorie qui contient encore des produits ne peut pas être supprimée.",
+      confirmLabel: "Supprimer",
+      tone: "danger",
+    });
+    if (!ok) return;
     run(() => api.delete(`/admin/categories/${category.id}`), "Suppression impossible.");
   };
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Catégories" description="Les univers du catalogue. Une catégorie qui contient des produits ne peut pas être supprimée." />
 
       <Card className="mb-6 p-4">

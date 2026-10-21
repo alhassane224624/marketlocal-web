@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Users } from "lucide-react";
+import Link from "next/link";
+import { Ban, RotateCcw, Users } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Avatar, Badge, Card, EmptyState, formatDate, LoadingRows, PageHeader, SearchInput, Segmented } from "@/components/ui";
+import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
+import { Alert, apiError, Avatar, Badge, Button, Card, EmptyState, formatDate, LoadingRows, PageHeader, SearchInput, Segmented } from "@/components/ui";
 
 interface UserAdmin {
   id: number;
@@ -14,7 +16,17 @@ interface UserAdmin {
   telephone?: string | null;
   ville?: string | null;
   created_at: string;
+  suspendu_at?: string | null;
+  motif_suspension?: string | null;
+  shop?: { id: number; nom: string; statut: string } | null;
+  commandes_count?: number;
 }
+
+const shopStatus: Record<string, { label: string; tone: "olive" | "saffron" | "red" }> = {
+  valide: { label: "validée", tone: "olive" },
+  en_attente: { label: "en attente", tone: "saffron" },
+  refuse: { label: "refusée", tone: "red" },
+};
 
 const roleBadge = {
   acheteur: { label: "Acheteur", tone: "saffron" as const },
@@ -28,6 +40,57 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [ask, promptDialog] = usePrompt();
+  const [confirm, confirmDialog] = useConfirm();
+
+  const replace = (user: UserAdmin) => setUsers((list) => list.map((u) => (u.id === user.id ? { ...u, ...user } : u)));
+
+  const suspend = async (user: UserAdmin) => {
+    const motif = await ask({
+      title: `Suspendre ${user.name} ?`,
+      description:
+        user.role === "vendeur"
+          ? "Le compte ne pourra plus se connecter et ses produits disparaîtront du catalogue. Vous pourrez le réactiver à tout moment."
+          : "Le compte ne pourra plus se connecter. Vous pourrez le réactiver à tout moment.",
+      inputLabel: "Motif (affiché à l’utilisateur s’il tente de se connecter)",
+      placeholder: "Ex. : signalements répétés de produits non conformes",
+      minLength: 5,
+      confirmLabel: "Suspendre le compte",
+      tone: "danger",
+    });
+    if (motif === null) return;
+    setBusyId(user.id);
+    setError("");
+    try {
+      const r = await api.post(`/admin/users/${user.id}/suspendre`, { motif });
+      replace(r.data);
+    } catch (err) {
+      setError(apiError(err, "Impossible de suspendre ce compte."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reactivate = async (user: UserAdmin) => {
+    const ok = await confirm({
+      title: `Réactiver ${user.name} ?`,
+      description: user.role === "vendeur" ? "Le compte pourra de nouveau se connecter et ses produits réapparaîtront dans le catalogue." : "Le compte pourra de nouveau se connecter.",
+      confirmLabel: "Réactiver",
+    });
+    if (!ok) return;
+    setBusyId(user.id);
+    setError("");
+    try {
+      const r = await api.post(`/admin/users/${user.id}/reactiver`);
+      replace(r.data);
+    } catch (err) {
+      setError(apiError(err, "Impossible de réactiver ce compte."));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   useEffect(() => {
     api
@@ -38,17 +101,25 @@ export default function AdminUsersPage() {
   }, []);
 
   const filtered = useMemo(
-    () => users.filter((u) => (filter === null || u.role === filter) && `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase())),
+    () =>
+      users.filter(
+        (u) =>
+          (filter === null || (filter === "suspendu" ? Boolean(u.suspendu_at) : u.role === filter)) &&
+          `${u.name} ${u.email} ${u.ville || ""} ${u.shop?.nom || ""}`.toLowerCase().includes(q.toLowerCase()),
+      ),
     [users, filter, q],
   );
 
-  const count = (role: string | null) => (role ? users.filter((u) => u.role === role).length : users.length);
+  const count = (role: string | null) =>
+    role === "suspendu" ? users.filter((u) => u.suspendu_at).length : role ? users.filter((u) => u.role === role).length : users.length;
 
   return (
     <DashboardLayout>
+      {promptDialog}
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Utilisateurs" description="Les comptes acheteurs, vendeurs, livreurs et administrateurs." />
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <Segmented
           options={[
             { value: null, label: "Tous", count: count(null) },
@@ -56,12 +127,15 @@ export default function AdminUsersPage() {
             { value: "vendeur", label: "Vendeurs", count: count("vendeur") },
             { value: "livreur", label: "Livreurs", count: count("livreur") },
             { value: "admin", label: "Admins", count: count("admin") },
+            ...(count("suspendu") > 0 ? [{ value: "suspendu", label: "Suspendus", count: count("suspendu") }] : []),
           ]}
           value={filter}
           onChange={setFilter}
         />
-        <SearchInput value={q} onChange={setQ} placeholder="Nom ou e-mail…" />
+        <SearchInput value={q} onChange={setQ} placeholder="Nom, e-mail, ville, boutique…" />
       </div>
+
+      {error && <Alert className="mb-4">{error}</Alert>}
 
       {loading ? (
         <LoadingRows rows={4} />
@@ -70,18 +144,21 @@ export default function AdminUsersPage() {
       ) : (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-sand-100 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">
                   <th className="px-5 py-3 font-semibold">Utilisateur</th>
                   <th className="px-5 py-3 font-semibold">Rôle</th>
+                  <th className="px-5 py-3 font-semibold">Activité</th>
                   <th className="px-5 py-3 font-semibold">Ville</th>
                   <th className="px-5 py-3 font-semibold">Inscrit le</th>
+                  <th className="px-5 py-3 font-semibold">Statut</th>
+                  <th className="px-5 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand-100">
                 {filtered.map((u) => (
-                  <tr key={u.id} className="transition hover:bg-sand-50">
+                  <tr key={u.id} className={`transition hover:bg-sand-50 ${u.suspendu_at ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={u.name} size="sm" />
@@ -92,8 +169,46 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3"><Badge tone={roleBadge[u.role].tone}>{roleBadge[u.role].label}</Badge></td>
+                    <td className="px-5 py-3 text-ink-600">
+                      {u.role === "vendeur" ? (
+                        u.shop ? (
+                          <Link href="/admin/commissions" className="hover:text-terra-700">
+                            <span className="font-semibold text-ink-800">{u.shop.nom}</span>{" "}
+                            <Badge tone={shopStatus[u.shop.statut]?.tone ?? "ink"}>{shopStatus[u.shop.statut]?.label ?? u.shop.statut}</Badge>
+                          </Link>
+                        ) : (
+                          <span className="text-ink-400">Pas de boutique</span>
+                        )
+                      ) : u.role === "acheteur" ? (
+                        `${u.commandes_count ?? 0} commande${(u.commandes_count ?? 0) > 1 ? "s" : ""}`
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-ink-600">{u.ville || "—"}</td>
                     <td className="px-5 py-3 text-ink-600">{formatDate(u.created_at)}</td>
+                    <td className="px-5 py-3">
+                      {u.suspendu_at ? (
+                        <div title={u.motif_suspension || undefined}>
+                          <Badge tone="red">Suspendu</Badge>
+                          {u.motif_suspension && <p className="mt-1 max-w-[180px] truncate text-xs text-red-700">{u.motif_suspension}</p>}
+                        </div>
+                      ) : (
+                        <Badge tone="olive">Actif</Badge>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {u.role !== "admin" &&
+                        (u.suspendu_at ? (
+                          <Button size="sm" variant="outline" onClick={() => reactivate(u)} loading={busyId === u.id}>
+                            <RotateCcw size={13} /> Réactiver
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="danger" onClick={() => suspend(u)} loading={busyId === u.id}>
+                            <Ban size={13} /> Suspendre
+                          </Button>
+                        ))}
+                    </td>
                   </tr>
                 ))}
               </tbody>

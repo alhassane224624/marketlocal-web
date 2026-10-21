@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import api from "@/lib/axios";
 import { ArrowRight, ArrowUpRight, PackageCheck, Percent, Search, ShieldCheck, ShoppingBag, Sparkles, Store } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { fetchProducts } from "@/features/products/productSlice";
@@ -22,13 +23,15 @@ const suggestions = ["Tapis berbère", "Huile d’argan", "Lanterne", "Miel"];
 export default function Home() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { items: products, status } = useAppSelector((s) => s.products);
+  const { items: products, status, total } = useAppSelector((s) => s.products);
   const { items: categories } = useAppSelector((s) => s.categories);
   const [query, setQuery] = useState("");
+  const [shops, setShops] = useState<{ id: number; nom: string; logo?: string | null }[]>([]);
 
   useEffect(() => {
     dispatch(fetchProducts({}));
     dispatch(fetchCategories());
+    api.get("/shops").then((r) => setShops(r.data || [])).catch(() => {});
   }, [dispatch]);
 
   const search = (e: FormEvent) => {
@@ -120,7 +123,7 @@ export default function Home() {
               </span>
               <div>
                 <p className="text-[13px] font-semibold text-ink-900">Paiement sécurisé</p>
-                <p className="text-xs text-ink-500">Traité par Stripe</p>
+                <p className="text-xs text-ink-500">Carte (Stripe) ou à la livraison</p>
               </div>
             </div>
           </div>
@@ -144,12 +147,30 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ------------------------------------------------- Chiffres réels */}
+      {total > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-14 sm:px-6">
+          <dl className="grid grid-cols-3 divide-x divide-sand-200 rounded-2xl border border-sand-200 bg-white py-6 shadow-soft">
+            {[
+              { value: total, label: `produit${total > 1 ? "s" : ""} en ligne` },
+              { value: shops.length, label: `boutique${shops.length > 1 ? "s" : ""} vérifiée${shops.length > 1 ? "s" : ""}` },
+              { value: categories.length, label: `univers` },
+            ].map(({ value, label }) => (
+              <div key={label} className="px-3 text-center">
+                <dd className="font-display text-3xl font-semibold text-ink-900 tabular-nums sm:text-4xl">{value}</dd>
+                <dt className="mt-1 text-xs text-ink-500 sm:text-sm">{label}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
       {/* ----------------------------------------------------- Catégories */}
       <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6">
         <SectionHeading
           eyebrow="Explorer"
           title="Par univers"
-          description="Cinq familles de produits, sélectionnées auprès d’ateliers et de coopératives."
+          description="Des familles de produits sélectionnées auprès d’ateliers et de coopératives."
         />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {(categories.length ? categories : Array.from({ length: 5 }, () => null)).map((category, i) =>
@@ -181,6 +202,40 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ------------------------------------------------------ Boutiques */}
+      {shops.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6">
+          <SectionHeading
+            eyebrow="Les vendeurs"
+            title="Boutiques vérifiées"
+            description="Chaque boutique est examinée par notre équipe avant de pouvoir vendre."
+          />
+          <ul className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+            {shops.slice(0, 12).map((shop) => (
+              <li key={shop.id} className="shrink-0">
+                <Link
+                  href={`/catalogue?shop=${shop.id}`}
+                  className="flex w-40 flex-col items-center gap-3 rounded-2xl border border-sand-200 bg-white p-5 text-center shadow-soft transition hover:-translate-y-0.5 hover:border-terra-200"
+                >
+                  {shop.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={shop.logo} alt="" className="h-16 w-16 rounded-full border border-sand-200 object-cover" />
+                  ) : (
+                    <span className="grid h-16 w-16 place-items-center rounded-full bg-terra-50 font-display text-2xl font-semibold text-terra-700">
+                      {shop.nom.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="line-clamp-2 text-sm font-semibold text-ink-900">{shop.nom}</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-olive-700">
+                    <ShieldCheck size={12} /> Vérifiée
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* ------------------------------------------------ Comment ça marche */}
       <section className="mx-auto max-w-7xl px-4 pt-24 sm:px-6">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
@@ -197,7 +252,7 @@ export default function Home() {
           <ol className="grid gap-4 sm:grid-cols-3">
             {[
               { icon: Search, title: "Découvrez", text: "Filtrez par univers, prix ou vendeur et lisez les avis vérifiés." },
-              { icon: ShoppingBag, title: "Commandez", text: "Panier multi-boutiques, paiement par carte sécurisé par Stripe." },
+              { icon: ShoppingBag, title: "Commandez", text: "Panier multi-boutiques, paiement par carte (Stripe) ou à la livraison." },
               { icon: PackageCheck, title: "Recevez", text: "Suivez la préparation, l’expédition puis la livraison." },
             ].map(({ icon: Icon, title, text }, i) => (
               <li key={title} className="relative rounded-2xl border border-sand-200 bg-white p-6 shadow-soft">

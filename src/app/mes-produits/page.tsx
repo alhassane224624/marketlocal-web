@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff, Package, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
+import { Check, Eye, EyeOff, Minus, Package, Pencil, Plus, Search, Store, Trash2 } from "lucide-react";
 import { useAppDispatch } from "@/lib/hooks";
 import { fetchMyShop } from "@/features/shop/shopSlice";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { ProductVisual } from "@/components/MarketLocalUI";
-import { Alert, apiError, Badge, ButtonLink, Card, EmptyState, LoadingRows, money, PageHeader, Segmented } from "@/components/ui";
+import { Alert, apiError, Badge, ButtonLink, Card, cn, EmptyState, LoadingRows, money, PageHeader, Segmented } from "@/components/ui";
 
 interface Product {
   id: number;
@@ -24,6 +25,68 @@ type StockFilter = "all" | "low" | "out" | "off";
 
 const isOnSale = (p: Product) => p.en_vente !== false;
 
+/** Stock modifiable sur place : − / + ou saisie, puis Entrée ou ✓ pour enregistrer. */
+function StockEditor({ product, onSaved, onError }: { product: Product; onSaved: (stock: number) => void; onError: (message: string) => void }) {
+  const [draft, setDraft] = useState(String(product.stock));
+  const [saving, setSaving] = useState(false);
+  const value = Math.max(0, Math.floor(Number(draft) || 0));
+  const dirty = draft !== "" && value !== product.stock;
+
+  const save = async () => {
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      await api.put(`/products/${product.id}`, { stock: value });
+      onSaved(value);
+      setDraft(String(value));
+    } catch (err) {
+      onError(apiError(err, "Impossible de mettre à jour le stock."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className={cn("flex h-9 items-center rounded-lg border bg-white", dirty ? "border-terra-400" : "border-sand-300")}>
+        <button type="button" onClick={() => setDraft(String(Math.max(0, value - 1)))} className="grid h-full w-8 place-items-center text-ink-500 hover:text-ink-900" aria-label={`Retirer une unité de ${product.nom}`}>
+          <Minus size={13} />
+        </button>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") setDraft(String(product.stock));
+          }}
+          inputMode="numeric"
+          aria-label={`Stock de ${product.nom}`}
+          className="h-full w-12 bg-transparent text-center text-sm font-semibold tabular-nums focus:outline-none"
+        />
+        <button type="button" onClick={() => setDraft(String(value + 1))} className="grid h-full w-8 place-items-center text-ink-500 hover:text-ink-900" aria-label={`Ajouter une unité à ${product.nom}`}>
+          <Plus size={13} />
+        </button>
+      </div>
+      {dirty ? (
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="grid h-9 w-9 place-items-center rounded-lg bg-terra-600 text-white hover:bg-terra-700 disabled:opacity-50"
+          aria-label="Enregistrer le stock"
+          title="Enregistrer"
+        >
+          <Check size={16} />
+        </button>
+      ) : product.stock === 0 ? (
+        <Badge tone="red">Épuisé</Badge>
+      ) : product.stock < 5 ? (
+        <Badge tone="saffron">Faible</Badge>
+      ) : null}
+    </div>
+  );
+}
+
 export default function MesProduitsPage() {
   const dispatch = useAppDispatch();
   const [products, setProducts] = useState<Product[]>([]);
@@ -34,6 +97,7 @@ export default function MesProduitsPage() {
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [error, setError] = useState("");
+  const [confirm, confirmDialog] = useConfirm();
 
   useEffect(() => {
     dispatch(fetchMyShop()).then((result) => {
@@ -44,7 +108,13 @@ export default function MesProduitsPage() {
   }, [dispatch]);
 
   const remove = async (product: Product) => {
-    if (!confirm(`Supprimer « ${product.nom} » ? Les commandes passées restent consultables.`)) return;
+    const ok = await confirm({
+      title: `Supprimer « ${product.nom} » ?`,
+      description: "Le produit disparaît définitivement de votre boutique. Les commandes passées restent consultables. Pour l’écarter temporairement, utilisez plutôt « Retirer de la vente ».",
+      confirmLabel: "Supprimer",
+      tone: "danger",
+    });
+    if (!ok) return;
     setDeletingId(product.id);
     setError("");
     try {
@@ -89,6 +159,7 @@ export default function MesProduitsPage() {
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader
         eyebrow="Espace vendeur"
         title="Mes produits"
@@ -160,13 +231,12 @@ export default function MesProduitsPage() {
                       <td className="px-5 py-3 text-ink-600">{p.category?.nom || "—"}</td>
                       <td className="px-5 py-3 text-right font-semibold tabular-nums">{money(p.prix)}</td>
                       <td className="px-5 py-3">
-                        {p.stock === 0 ? (
-                          <Badge tone="red">Épuisé</Badge>
-                        ) : p.stock < 5 ? (
-                          <Badge tone="saffron">{p.stock} restants</Badge>
-                        ) : (
-                          <span className="tabular-nums text-ink-700">{p.stock}</span>
-                        )}
+                        <StockEditor
+                          key={`${p.id}-${p.stock}`}
+                          product={p}
+                          onSaved={(stock) => setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, stock } : x)))}
+                          onError={setError}
+                        />
                       </td>
                       <td className="px-5 py-3">
                         {isOnSale(p) ? <Badge tone="olive">En vente</Badge> : <Badge tone="ink">Retiré</Badge>}

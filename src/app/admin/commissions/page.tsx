@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, Pencil, Store, X } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   Alert,
   apiError,
@@ -53,6 +54,7 @@ export default function AdminBoutiquesPage() {
   const [error, setError] = useState("");
   const [refusing, setRefusing] = useState<number | null>(null);
   const [motif, setMotif] = useState("");
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = () =>
     api
@@ -78,11 +80,33 @@ export default function AdminBoutiquesPage() {
     }
   };
 
-  const saveCommission = (id: number) =>
-    run(id, async () => {
-      await api.put(`/admin/shops/${id}/commission`, { commission: Number(value) });
+  const validate = async (shop: Shop) => {
+    const ok = await confirm({
+      title: `Valider « ${shop.nom} » ?`,
+      description: "La boutique devient visible dans le catalogue et le vendeur peut publier ses produits.",
+      confirmLabel: "Valider la boutique",
+    });
+    if (ok) run(shop.id, () => api.put(`/admin/shops/${shop.id}/valider`));
+  };
+
+  const saveCommission = async (shop: Shop) => {
+    const id = shop.id;
+    const next = Number(value);
+    if (next === Number(shop.commission)) {
+      setEditing(null);
+      return;
+    }
+    const ok = await confirm({
+      title: `Passer la commission de « ${shop.nom} » à ${next} % ?`,
+      description: `Actuellement ${Number(shop.commission)} %. Le nouveau taux s’appliquera aux prochaines ventes ; les commandes passées gardent leur taux.`,
+      confirmLabel: "Appliquer",
+    });
+    if (!ok) return;
+    return run(id, async () => {
+      await api.put(`/admin/shops/${id}/commission`, { commission: next });
       setEditing(null);
     });
+  };
 
   const refuse = (id: number) =>
     run(id, async () => {
@@ -97,6 +121,7 @@ export default function AdminBoutiquesPage() {
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Boutiques" description="Validez les demandes et ajustez la commission de chaque boutique." />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -163,7 +188,7 @@ export default function AdminBoutiquesPage() {
                         />
                         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-500">%</span>
                       </label>
-                      <Button size="sm" variant="dark" onClick={() => saveCommission(shop.id)} loading={busy === shop.id} aria-label="Enregistrer">
+                      <Button size="sm" variant="dark" onClick={() => saveCommission(shop)} loading={busy === shop.id} aria-label="Enregistrer">
                         <Check size={14} />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)} aria-label="Annuler">
@@ -189,7 +214,7 @@ export default function AdminBoutiquesPage() {
 
                   {shop.statut === "en_attente" && (
                     <>
-                      <Button size="sm" variant="success" onClick={() => run(shop.id, () => api.put(`/admin/shops/${shop.id}/valider`))} loading={busy === shop.id}>
+                      <Button size="sm" variant="success" onClick={() => validate(shop)} loading={busy === shop.id}>
                         Valider
                       </Button>
                       <Button
@@ -205,7 +230,7 @@ export default function AdminBoutiquesPage() {
                     </>
                   )}
                   {shop.statut === "refuse" && (
-                    <Button size="sm" variant="outline" onClick={() => run(shop.id, () => api.put(`/admin/shops/${shop.id}/valider`))} loading={busy === shop.id}>
+                    <Button size="sm" variant="outline" onClick={() => validate(shop)} loading={busy === shop.id}>
                       Revalider
                     </Button>
                   )}

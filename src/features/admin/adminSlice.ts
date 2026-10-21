@@ -11,6 +11,11 @@ export interface Stats {
   total_commandes: number;
   chiffre_affaires_total: number;
   commissions_total?: number;
+  litiges_ouverts?: number;
+  virements_vendeurs_en_attente?: number;
+  virements_vendeurs_echoues?: number;
+  livreurs_a_payer?: number;
+  comptes_suspendus?: number;
 }
 
 export interface ShopAdmin {

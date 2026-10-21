@@ -27,6 +27,7 @@ import api from "@/lib/axios";
 import { deliveryLabel, isActiveDelivery, type Delivery } from "@/lib/deliveries";
 import { itemsTotal, readyToShip, shopStatut } from "@/lib/orders";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import SalesChart, { salesByDay } from "@/components/SalesChart";
 import {
   Alert,
@@ -65,6 +66,7 @@ interface ShopStats {
   chiffre_affaires_net_30j: number;
   chiffre_affaires_brut_30j: number;
   taux_commission: number;
+  finances?: { verse: number; en_attente: number; especes: number; commission_especes: number };
 }
 
 export default function DashboardPage() {
@@ -229,6 +231,10 @@ function Seller({ name }: { name: string }) {
   }
 
   const toShip = (orders || []).filter(readyToShip);
+  // Produits en vente dont le stock est épuisé ou faible, les plus urgents d'abord.
+  const lowStock = (shop?.products || [])
+    .filter((p) => p.en_vente !== false && p.stock < 5)
+    .sort((a, b) => a.stock - b.stock);
   const points = salesByDay(orders || []);
   const sales30 = points.reduce((s, p) => s + p.value, 0);
 
@@ -263,8 +269,20 @@ function Seller({ name }: { name: string }) {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Ventes nettes (30 j)" value={money(stats?.chiffre_affaires_net_30j)} icon={Coins} tone="terra" hint={stats ? `Commission ${stats.taux_commission} % déduite` : undefined} />
-        <StatCard label="Commandes à expédier" value={toShip.length} icon={Truck} tone="saffron" />
-        <StatCard label="Commandes au total" value={stats?.total_commandes ?? "—"} icon={ReceiptText} tone="sky" />
+        <StatCard
+          label="Commandes à expédier"
+          value={orders === null ? "—" : toShip.length}
+          icon={Truck}
+          tone="saffron"
+          hint={stats ? `${stats.total_commandes} commande${stats.total_commandes > 1 ? "s" : ""} au total` : undefined}
+        />
+        <StatCard
+          label="Versements à venir"
+          value={money(stats?.finances?.en_attente)}
+          icon={Wallet}
+          tone="sky"
+          hint={stats?.finances ? <Link href="/mes-statistiques" className="hover:underline">{money(stats.finances.verse)} déjà versés</Link> : undefined}
+        />
         <StatCard
           label="Produits en ligne"
           value={stats?.produits_en_ligne ?? "—"}
@@ -318,6 +336,27 @@ function Seller({ name }: { name: string }) {
           )}
         </Card>
       </div>
+
+      {lowStock.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader
+            title="Stock à surveiller"
+            icon={AlertTriangle}
+            description="Produits épuisés ou presque : réapprovisionnez-les pour ne pas manquer de ventes."
+            action={<Link href="/mes-produits" className="text-sm font-semibold text-terra-700 hover:underline">Gérer les stocks</Link>}
+          />
+          <ul className="divide-y divide-sand-100">
+            {lowStock.slice(0, 6).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                <Link href={`/mes-produits/${p.id}`} className="min-w-0 truncate font-semibold text-ink-900 hover:text-terra-700">{p.nom}</Link>
+                <span className={p.stock === 0 ? "shrink-0 font-semibold text-red-700" : "shrink-0 font-semibold text-saffron-700"}>
+                  {p.stock === 0 ? "Épuisé" : `${p.stock} restant${p.stock > 1 ? "s" : ""}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </>
   );
 }
@@ -325,6 +364,12 @@ function Seller({ name }: { name: string }) {
 /* ------------------------------------------------------------------ */
 /* Administrateur                                                      */
 /* ------------------------------------------------------------------ */
+
+/** « 1 litige ouvert » / « 3 litiges ouverts » (avec le nombre si withCount). */
+function plural(n: number, one: string, many: string, withCount = false) {
+  const word = n > 1 ? many : one;
+  return withCount ? `${n} ${word}` : word;
+}
 
 function Admin() {
   const dispatch = useAppDispatch();
@@ -340,19 +385,74 @@ function Admin() {
       .catch(() => setOrders([]));
   }, [dispatch]);
 
+  const [confirm, confirmDialog] = useConfirm();
   const pending = shops.filter((s) => s.statut === "en_attente");
   const points = salesByDay(orders || [], 30, false);
+
+  const validate = async (shop: (typeof shops)[number]) => {
+    const ok = await confirm({
+      title: `Valider « ${shop.nom} » ?`,
+      description: "La boutique devient visible dans le catalogue et le vendeur peut publier ses produits.",
+      confirmLabel: "Valider la boutique",
+    });
+    if (ok) dispatch(validateShop(shop.id)).then(() => dispatch(fetchStats()));
+  };
+
+  // Ce qui demande une action de l'admin, avec un lien direct.
+  const todo = stats
+    ? [
+        { count: stats.boutiques_en_attente, label: plural(stats.boutiques_en_attente, "boutique à valider", "boutiques à valider"), href: "/admin/commissions", icon: Store },
+        { count: stats.litiges_ouverts ?? 0, label: plural(stats.litiges_ouverts ?? 0, "litige ouvert", "litiges ouverts"), href: "/admin/litiges", icon: AlertTriangle },
+        { count: stats.livreurs_a_payer ?? 0, label: "à verser aux livreurs", href: "/admin/livreurs", icon: Truck, money: true },
+        {
+          count: stats.virements_vendeurs_echoues ?? 0,
+          label: plural(stats.virements_vendeurs_echoues ?? 0, "virement vendeur échoué", "virements vendeurs échoués"),
+          href: "/admin/commandes",
+          icon: Wallet,
+          hint: stats.virements_vendeurs_en_attente ? `${money(stats.virements_vendeurs_en_attente)} en attente au total` : undefined,
+        },
+      ]
+    : [];
   const sales30 = points.reduce((s, p) => s + p.value, 0);
 
   return (
     <>
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Vue d’ensemble" description="L’activité de la marketplace en un coup d’œil." />
+
+      {todo.length > 0 && (
+        <section aria-label="À traiter" className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {todo.map(({ count, label, href, icon: Icon, money: isMoney, hint }) => {
+            const active = count > 0;
+            return (
+              <Link
+                key={label}
+                href={href}
+                className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition hover:shadow-soft ${
+                  active ? "border-saffron-300 bg-saffron-50" : "border-sand-200 bg-white"
+                }`}
+              >
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${active ? "bg-white text-saffron-700" : "bg-sand-100 text-ink-400"}`}>
+                  <Icon size={17} />
+                </span>
+                <span className="min-w-0">
+                  <span className={`block font-display text-xl font-semibold tabular-nums ${active ? "text-ink-900" : "text-ink-400"}`}>
+                    {isMoney ? money(count) : count}
+                  </span>
+                  <span className="block truncate text-xs text-ink-600">{label}</span>
+                  {hint && <span className="block truncate text-[11px] text-ink-500">{hint}</span>}
+                </span>
+              </Link>
+            );
+          })}
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Chiffre d’affaires" value={money(stats?.chiffre_affaires_total)} icon={Coins} tone="terra" hint="Commandes payées" />
         <StatCard label="Commissions" value={money(stats?.commissions_total)} icon={Percent} tone="olive" hint="Revenu de la plateforme" />
         <StatCard label="Commandes" value={stats?.total_commandes ?? "—"} icon={ReceiptText} tone="sky" />
-        <StatCard label="Utilisateurs" value={stats?.total_utilisateurs ?? "—"} icon={Users} tone="ink" hint={stats ? `${stats.total_acheteurs} acheteurs · ${stats.total_vendeurs} vendeurs` : undefined} />
+        <StatCard label="Utilisateurs" value={stats?.total_utilisateurs ?? "—"} icon={Users} tone="ink" hint={stats ? `${plural(stats.total_acheteurs, "acheteur", "acheteurs", true)} · ${plural(stats.total_vendeurs, "vendeur", "vendeurs", true)}` : undefined} />
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
@@ -386,7 +486,7 @@ function Admin() {
                   </div>
                   {(s.activite || s.description) && <p className="mt-2 line-clamp-2 text-sm text-ink-600">{s.activite || s.description}</p>}
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" variant="success" onClick={() => dispatch(validateShop(s.id)).then(() => dispatch(fetchStats()))}>Valider</Button>
+                    <Button size="sm" variant="success" onClick={() => validate(s)}>Valider</Button>
                     <ButtonLink size="sm" variant="outline" href="/admin/commissions">Examiner / refuser</ButtonLink>
                   </div>
                 </li>

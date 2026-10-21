@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Banknote, Bike, MapPin, PackageCheck, Phone, ReceiptText, Truck } from "lucide-react";
+import { Banknote, Bike, Check, MapPin, PackageCheck, Phone, ReceiptText, Truck } from "lucide-react";
 import api from "@/lib/axios";
 import { deliveryLabel, isActiveDelivery, receptionLabel, type Delivery } from "@/lib/deliveries";
 import { isCashOnDelivery, itemsTotal, readyToShip, shopStatut } from "@/lib/orders";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Alert, apiError, Avatar, Button, Card, EmptyState, formatDate, LoadingRows, money, PageHeader, Segmented, StatusBadge } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
+import { Alert, apiError, Avatar, Button, Card, cn, EmptyState, formatDate, LoadingRows, money, PageHeader, Segmented, StatusBadge } from "@/components/ui";
 
 interface ShopOrder {
   id: number;
@@ -29,6 +30,34 @@ const filters = [
   { value: "non_payee", label: "Non payées" },
 ];
 
+/** Étapes affichées sous chaque commande ; l'étape courante dépend du mode de paiement. */
+function OrderProgress({ order }: { order: ShopOrder }) {
+  const statut = shopStatut(order);
+  if (statut === "annulee") return null;
+  const cod = isCashOnDelivery(order);
+  const steps = cod ? ["Reçue", "Expédiée", "Livrée et encaissée"] : ["Payée", "Expédiée", "Livrée"];
+  // Carte non payée : aucune étape franchie.
+  const done = statut === "livree" ? 3 : statut === "expediee" ? 2 : statut === "payee" || cod ? 1 : 0;
+  return (
+    <ol className="mt-4 flex items-center gap-2 text-xs" aria-label="Avancement de la commande">
+      {steps.map((label, i) => (
+        <li key={label} className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            className={cn(
+              "grid h-5 w-5 shrink-0 place-items-center rounded-full",
+              i < done ? "bg-olive-600 text-white" : i === done ? "border-2 border-terra-500 bg-white" : "border border-sand-300 bg-white",
+            )}
+          >
+            {i < done && <Check size={12} strokeWidth={3} />}
+          </span>
+          <span className={cn("truncate font-semibold", i < done ? "text-ink-800" : i === done ? "text-terra-700" : "text-ink-400")}>{label}</span>
+          {i < steps.length - 1 && <span className={cn("h-px flex-1", i < done - 1 ? "bg-olive-400" : "bg-sand-200")} />}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function filterKey(order: ShopOrder): string {
   if (readyToShip(order)) return "a_expedier";
   const statut = shopStatut(order);
@@ -41,6 +70,7 @@ export default function MesCommandesVendeurPage() {
   const [filter, setFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = () =>
     api
@@ -53,7 +83,25 @@ export default function MesCommandesVendeurPage() {
     load();
   }, []);
 
-  const updateStatus = async (id: number, statut: string) => {
+  const updateStatus = async (order: ShopOrder, statut: "expediee" | "livree") => {
+    const id = order.id;
+    const ok = await confirm(
+      statut === "expediee"
+        ? {
+            title: `Expédier la commande #${id} vous-même ?`,
+            description: "Le client verra la commande comme expédiée. Vous ne pourrez plus demander de livreur pour ce colis.",
+            confirmLabel: "Oui, je l’expédie",
+          }
+        : {
+            title: `Confirmer la livraison de la commande #${id} ?`,
+            description: isCashOnDelivery(order)
+              ? `Confirmez seulement si le client a reçu le colis et vous a payé ${money(itemsTotal(order))} en espèces. Cette action est définitive.`
+              : "Confirmez seulement si le client a bien reçu son colis. Cette action est définitive.",
+            confirmLabel: isCashOnDelivery(order) ? "Livrée et encaissée" : "Marquer livrée",
+            tone: "danger",
+          },
+    );
+    if (!ok) return;
     setUpdatingId(id);
     setError(null);
     try {
@@ -83,6 +131,7 @@ export default function MesCommandesVendeurPage() {
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader eyebrow="Espace vendeur" title="Commandes reçues" description="Préparez, expédiez puis confirmez la livraison de vos articles." />
 
       {!loading && orders.length > 0 && (
@@ -123,9 +172,9 @@ export default function MesCommandesVendeurPage() {
                           Commande #{order.id}
                         </Link>
                         <StatusBadge status={statut} label={isCashOnDelivery(order) && statut === "en_attente" ? "À préparer" : undefined} />
-                        {isCashOnDelivery(order) && (
+                        {isCashOnDelivery(order) && statut !== "annulee" && (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-olive-700">
-                            <Banknote size={13} /> À encaisser à la livraison
+                            <Banknote size={13} /> {statut === "livree" ? "Encaissée en espèces" : "À encaisser à la livraison"}
                           </span>
                         )}
                       </div>
@@ -145,18 +194,19 @@ export default function MesCommandesVendeurPage() {
                         <Button onClick={() => requestCourier(order.id)} loading={updatingId === order.id}>
                           <Bike size={16} /> Demander un livreur
                         </Button>
-                        <Button variant="outline" onClick={() => updateStatus(order.id, "expediee")} disabled={updatingId === order.id}>
+                        <Button variant="outline" onClick={() => updateStatus(order, "expediee")} disabled={updatingId === order.id}>
                           <Truck size={16} /> Je livre moi-même
                         </Button>
                       </>
                     )}
                     {statut === "expediee" && !course && (
-                      <Button variant="success" onClick={() => updateStatus(order.id, "livree")} loading={updatingId === order.id}>
+                      <Button variant="success" onClick={() => updateStatus(order, "livree")} loading={updatingId === order.id}>
                         <PackageCheck size={16} /> {isCashOnDelivery(order) ? "Livrée et encaissée" : "Marquer livrée"}
                       </Button>
                     )}
                   </div>
                 </div>
+                <OrderProgress order={order} />
                 {reception && (
                   <div
                     className={`mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl px-4 py-3 text-sm ${

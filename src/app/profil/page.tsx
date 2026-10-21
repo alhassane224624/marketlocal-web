@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, MapPin, Pencil, Plus, Star, Trash2, UserRound, X } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { fetchMe, type User } from "@/features/auth/authSlice";
 import api from "@/lib/axios";
@@ -100,6 +101,8 @@ function Addresses({ user }: { user: User }) {
   const [editing, setEditing] = useState<Address | "new" | null>(null);
   const [error, setError] = useState("");
 
+  const [confirm, confirmDialog] = useConfirm();
+
   const load = () =>
     api
       .get("/addresses")
@@ -111,7 +114,8 @@ function Addresses({ user }: { user: User }) {
   }, []);
 
   const remove = async (id: number) => {
-    if (!confirm("Supprimer cette adresse ?")) return;
+    const ok = await confirm({ title: "Supprimer cette adresse ?", confirmLabel: "Supprimer", tone: "danger" });
+    if (!ok) return;
     try {
       await api.delete(`/addresses/${id}`);
       await load(); // l'API peut avoir désigné une nouvelle adresse par défaut
@@ -131,6 +135,7 @@ function Addresses({ user }: { user: User }) {
 
   return (
     <Card className="h-fit">
+      {confirmDialog}
       <CardHeader
         title="Adresses de livraison"
         icon={MapPin}

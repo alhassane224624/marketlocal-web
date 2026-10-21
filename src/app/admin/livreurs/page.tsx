@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bike, Wallet } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Alert, apiError, Avatar, Button, Card, EmptyState, LoadingRows, money, PageHeader, StatCard } from "@/components/ui";
 
 interface Livreur {
@@ -28,6 +29,8 @@ export default function AdminLivreursPage() {
   const [paying, setPaying] = useState<number | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  const [confirm, confirmDialog] = useConfirm();
+
   const load = () =>
     api
       .get("/admin/livreurs")
@@ -39,7 +42,12 @@ export default function AdminLivreursPage() {
   }, []);
 
   const pay = async (l: Livreur) => {
-    if (!confirm(`Confirmer le versement de ${money(l.a_payer)} à ${l.name} ?`)) return;
+    const ok = await confirm({
+      title: `Enregistrer le versement de ${money(l.a_payer)} à ${l.name} ?`,
+      description: "Confirmez seulement après avoir réellement payé le livreur : ses courses seront marquées comme réglées.",
+      confirmLabel: "Versement effectué",
+    });
+    if (!ok) return;
     setPaying(l.id);
     setMessage(null);
     try {
@@ -58,6 +66,7 @@ export default function AdminLivreursPage() {
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Livreurs" description="Rémunérations à verser pour les courses payées par carte, une fois la réception confirmée par le client." />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4">

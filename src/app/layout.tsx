@@ -8,8 +8,8 @@ const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axe
 
 export const metadata: Metadata = {
   title: {
-    default: "MarketLocal — L'artisanat local, en direct des ateliers",
-    template: "%s · MarketLocal",
+    default: "AD MarketLocal — L'artisanat local, en direct des ateliers",
+    template: "%s · AD MarketLocal",
   },
   description:
     "Marketplace multi-vendeurs : achetez directement aux artisans, coopératives et producteurs locaux.",

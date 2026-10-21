@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, PackageSearch, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowDownUp, ChevronLeft, ChevronRight, PackageSearch, Search, SlidersHorizontal, X } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { fetchProducts } from "@/features/products/productSlice";
 import { fetchCategories } from "@/features/categories/categorySlice";
@@ -13,6 +13,21 @@ import { Button, cn, EmptyState, inputClass, Select, Skeleton } from "@/componen
 interface Shop {
   id: number;
   nom: string;
+}
+
+type Tri = "recent" | "prix_asc" | "prix_desc" | "note";
+const triOptions: { value: Tri; label: string }[] = [
+  { value: "recent", label: "Nouveautés" },
+  { value: "prix_asc", label: "Prix croissant" },
+  { value: "prix_desc", label: "Prix décroissant" },
+  { value: "note", label: "Mieux notés" },
+];
+
+/** Pages à afficher : 1 … 4 5 6 … 12 (les « … » valent null). */
+function pageList(current: number, last: number): (number | null)[] {
+  const pages = new Set([1, last, current - 1, current, current + 1].filter((n) => n >= 1 && n <= last));
+  const sorted = [...pages].sort((a, b) => a - b);
+  return sorted.flatMap((n, i) => (i > 0 && n - sorted[i - 1] > 1 ? [null, n] : [n]));
 }
 
 export default function CataloguePage() {
@@ -42,6 +57,8 @@ function Catalogue({ params }: { params: URLSearchParams }) {
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
   const [page, setPage] = useState(1);
+  const [tri, setTri] = useState<Tri>((params.get("tri") as Tri) || "recent");
+  const [enStock, setEnStock] = useState(params.get("en_stock") === "1");
   const [mobileFilters, setMobileFilters] = useState(false);
 
   useEffect(() => {
@@ -62,13 +79,21 @@ function Catalogue({ params }: { params: URLSearchParams }) {
             q: search || undefined,
             prix_min: min ? Number(min) : undefined,
             prix_max: max ? Number(max) : undefined,
+            tri: tri === "recent" ? undefined : tri,
+            en_stock: enStock ? 1 : undefined,
             page,
           }),
         ),
       250,
     );
     return () => clearTimeout(timer);
-  }, [dispatch, category, shop, search, min, max, page]);
+  }, [dispatch, category, shop, search, min, max, tri, enStock, page]);
+
+  // Nouvelle page de résultats : on remonte en haut de la liste.
+  const goTo = (n: number) => {
+    setPage(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const reset = () => {
     setCategory(null);
@@ -76,6 +101,7 @@ function Catalogue({ params }: { params: URLSearchParams }) {
     setSearch("");
     setMin("");
     setMax("");
+    setEnStock(false);
     setPage(1);
   };
 
@@ -86,6 +112,7 @@ function Catalogue({ params }: { params: URLSearchParams }) {
     activeShop && { label: activeShop.nom, clear: () => setShop(null) },
     search && { label: `« ${search} »`, clear: () => setSearch("") },
     (min || max) && { label: `${min || 0} – ${max || "∞"} MAD`, clear: () => { setMin(""); setMax(""); } },
+    enStock && { label: "En stock", clear: () => setEnStock(false) },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   const filters = (
@@ -133,6 +160,16 @@ function Catalogue({ params }: { params: URLSearchParams }) {
         </div>
       </fieldset>
 
+      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm font-semibold text-ink-800">
+        Disponible uniquement
+        <input
+          type="checkbox"
+          checked={enStock}
+          onChange={(e) => { setEnStock(e.target.checked); setPage(1); }}
+          className="h-4 w-4 accent-terra-600"
+        />
+      </label>
+
       {chips.length > 0 && (
         <Button variant="ghost" size="sm" onClick={reset} className="-ml-3">
           <X size={14} /> Effacer les filtres
@@ -161,7 +198,7 @@ function Catalogue({ params }: { params: URLSearchParams }) {
               <input
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                placeholder="Rechercher un produit…"
+                placeholder="Produit, matière, boutique…"
                 className="h-12 w-full rounded-full border border-sand-300 bg-white pl-11 pr-4 text-[15px] shadow-soft placeholder:text-ink-400 focus:border-terra-400 focus:outline-none focus:ring-4 focus:ring-terra-100"
               />
             </label>
@@ -179,6 +216,19 @@ function Catalogue({ params }: { params: URLSearchParams }) {
             <Button variant="outline" size="sm" onClick={() => setMobileFilters(true)} className="lg:hidden">
               <SlidersHorizontal size={14} /> Filtres {chips.length > 0 && `(${chips.length})`}
             </Button>
+            <label className="order-last ml-auto flex items-center gap-2 text-sm text-ink-600 sm:order-none">
+              <ArrowDownUp size={14} className="text-ink-400" />
+              <span className="sr-only sm:not-sr-only">Trier par</span>
+              <select
+                value={tri}
+                onChange={(e) => { setTri(e.target.value as Tri); setPage(1); }}
+                className="h-8 rounded-lg border border-sand-300 bg-white px-2 text-sm font-semibold text-ink-800 focus:border-terra-400 focus:outline-none"
+              >
+                {triOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </label>
             {chips.map((chip) => (
               <button
                 key={chip.label}
@@ -201,7 +251,7 @@ function Catalogue({ params }: { params: URLSearchParams }) {
             <EmptyState
               icon={PackageSearch}
               title="Aucun produit trouvé"
-              description="Essayez un autre mot-clé ou élargissez la fourchette de prix."
+              description="Essayez un autre mot-clé, une autre catégorie ou élargissez la fourchette de prix."
               action={<Button variant="outline" onClick={reset}>Réinitialiser les filtres</Button>}
             />
           ) : (
@@ -214,15 +264,19 @@ function Catalogue({ params }: { params: URLSearchParams }) {
 
           {lastPage > 1 && (
             <nav className="mt-12 flex items-center justify-center gap-1.5" aria-label="Pagination">
-              <PageButton disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} label="Page précédente">
+              <PageButton disabled={currentPage <= 1} onClick={() => goTo(currentPage - 1)} label="Page précédente">
                 <ChevronLeft size={16} />
               </PageButton>
-              {Array.from({ length: lastPage }, (_, i) => i + 1).map((n) => (
-                <PageButton key={n} active={n === currentPage} onClick={() => setPage(n)} label={`Page ${n}`}>
-                  {n}
-                </PageButton>
-              ))}
-              <PageButton disabled={currentPage >= lastPage} onClick={() => setPage(currentPage + 1)} label="Page suivante">
+              {pageList(currentPage, lastPage).map((n, i) =>
+                n === null ? (
+                  <span key={`gap-${i}`} className="px-1 text-ink-400" aria-hidden>…</span>
+                ) : (
+                  <PageButton key={n} active={n === currentPage} onClick={() => goTo(n)} label={`Page ${n}`}>
+                    {n}
+                  </PageButton>
+                ),
+              )}
+              <PageButton disabled={currentPage >= lastPage} onClick={() => goTo(currentPage + 1)} label="Page suivante">
                 <ChevronRight size={16} />
               </PageButton>
             </nav>

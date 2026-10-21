@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Banknote, Check, CreditCard, Lock, MapPin, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { ArrowRight, Banknote, Check, CreditCard, Lock, MapPin, Minus, Package, Plus, ShoppingBag, Store, Trash2, X } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { clearCart, decrementQuantity, incrementQuantity, removeFromCart } from "@/features/cart/cartSlice";
 import api from "@/lib/axios";
@@ -56,6 +56,16 @@ export default function PanierPage() {
   // Un colis par boutique : mêmes frais que ceux calculés par l'API à la commande.
   const frais = fraisColis * shopCount;
   const grandTotal = total + frais;
+  // Un colis par boutique : on regroupe les articles pour afficher les frais colis par colis.
+  const colis = useMemo(() => {
+    const groups = new Map<string, typeof items>();
+    for (const item of items) groups.set(item.shop_nom, [...(groups.get(item.shop_nom) || []), item]);
+    return [...groups.entries()].map(([shop, list]) => ({
+      shop,
+      items: list,
+      sousTotal: list.reduce((s, i) => s + i.prix * i.quantite, 0),
+    }));
+  }, [items]);
 
   useEffect(() => {
     api
@@ -189,56 +199,67 @@ export default function PanierPage() {
 
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="space-y-8">
-            <Card>
-              <ul className="divide-y divide-sand-100">
-                {items.map((item) => (
-                  <li key={item.product_id} className="flex gap-4 p-4 sm:gap-5 sm:p-5">
-                    <Link href={`/catalogue/${item.product_id}`} className="h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
-                      <ProductVisual product={{ image: item.image, nom: item.nom, category: item.categorie ? { nom: item.categorie } : null }} />
-                    </Link>
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <Link href={`/catalogue/${item.product_id}`} className="line-clamp-2 font-display text-lg font-semibold leading-snug text-ink-900 hover:text-terra-700">
-                            {item.nom}
-                          </Link>
-                          <p className="mt-0.5 text-[13px] text-ink-500">{item.shop_nom}</p>
+            <div className="space-y-5">
+              {colis.map((group, index) => (
+                <Card key={group.shop}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-100 px-4 py-3 sm:px-5">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                      <Store size={15} className="text-terra-600" /> {group.shop}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs text-ink-500">
+                      <Package size={13} /> Colis {index + 1}/{colis.length} · livraison {fraisColis > 0 ? money(fraisColis) : "offerte"}
+                    </p>
+                  </div>
+                  <ul className="divide-y divide-sand-100">
+                    {group.items.map((item) => (
+                      <li key={item.product_id} className="flex gap-4 p-4 sm:gap-5 sm:p-5">
+                        <Link href={`/catalogue/${item.product_id}`} className="h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-28">
+                          <ProductVisual product={{ image: item.image, nom: item.nom, category: item.categorie ? { nom: item.categorie } : null }} />
+                        </Link>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <Link href={`/catalogue/${item.product_id}`} className="line-clamp-2 font-display text-lg font-semibold leading-snug text-ink-900 hover:text-terra-700">
+                                {item.nom}
+                              </Link>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => dispatch(removeFromCart(item.product_id))}
+                              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-500 transition hover:bg-red-50 hover:text-red-700"
+                              aria-label={`Retirer ${item.nom}`}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+                            <div className="flex h-10 items-center rounded-full border border-sand-300">
+                              <button type="button" onClick={() => dispatch(decrementQuantity(item.product_id))} className="grid h-full w-10 place-items-center text-ink-600 hover:text-ink-900" aria-label="Diminuer">
+                                <Minus size={14} />
+                              </button>
+                              <span className="w-6 text-center text-sm font-semibold tabular-nums">{item.quantite}</span>
+                              <button
+                                type="button"
+                                onClick={() => dispatch(incrementQuantity(item.product_id))}
+                                disabled={item.quantite >= item.stock}
+                                className="grid h-full w-10 place-items-center text-ink-600 hover:text-ink-900 disabled:opacity-30"
+                                aria-label="Augmenter"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-ink-900 tabular-nums">{money(item.prix * item.quantite)}</p>
+                              {item.quantite > 1 && <p className="text-xs text-ink-500">{money(item.prix)} l’unité</p>}
+                            </div>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => dispatch(removeFromCart(item.product_id))}
-                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-500 transition hover:bg-red-50 hover:text-red-700"
-                          aria-label={`Retirer ${item.nom}`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      <div className="mt-auto flex items-end justify-between gap-3 pt-3">
-                        <div className="flex h-10 items-center rounded-full border border-sand-300">
-                          <button type="button" onClick={() => dispatch(decrementQuantity(item.product_id))} className="grid h-full w-10 place-items-center text-ink-600 hover:text-ink-900" aria-label="Diminuer">
-                            <Minus size={14} />
-                          </button>
-                          <span className="w-6 text-center text-sm font-semibold tabular-nums">{item.quantite}</span>
-                          <button
-                            type="button"
-                            onClick={() => dispatch(incrementQuantity(item.product_id))}
-                            disabled={item.quantite >= item.stock}
-                            className="grid h-full w-10 place-items-center text-ink-600 hover:text-ink-900 disabled:opacity-30"
-                            aria-label="Augmenter"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-ink-900 tabular-nums">{money(item.prix * item.quantite)}</p>
-                          {item.quantite > 1 && <p className="text-xs text-ink-500">{money(item.prix)} l’unité</p>}
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              ))}
+            </div>
 
             {token && user?.role === "acheteur" && (
               <section>
@@ -355,16 +376,38 @@ export default function PanierPage() {
             <Card className="p-6">
               <h2 className="font-display text-2xl font-semibold text-ink-900">Récapitulatif</h2>
               <dl className="mt-6 space-y-3 text-sm">
-                <div className="flex justify-between"><dt className="text-ink-600">Sous-total</dt><dd className="font-semibold tabular-nums">{money(total)}</dd></div>
                 <div className="flex justify-between">
-                  <dt className="text-ink-600">Livraison{shopCount > 1 ? ` (${shopCount} colis)` : ""}</dt>
-                  <dd className="font-semibold tabular-nums">{frais > 0 ? money(frais) : "Offerte"}</dd>
+                  <dt className="text-ink-600">Articles ({count})</dt>
+                  <dd className="font-semibold tabular-nums">{money(total)}</dd>
                 </div>
+                <div>
+                  <div className="flex justify-between">
+                    <dt className="text-ink-600">Livraison ({shopCount} colis)</dt>
+                    <dd className="font-semibold tabular-nums">{frais > 0 ? money(frais) : "Offerte"}</dd>
+                  </div>
+                  {frais > 0 && shopCount > 1 && (
+                    <ul className="mt-1.5 space-y-1 border-l-2 border-sand-200 pl-3 text-xs text-ink-500">
+                      {colis.map((g) => (
+                        <li key={g.shop} className="flex justify-between gap-3">
+                          <span className="truncate">{g.shop}</span>
+                          <span className="tabular-nums">{money(fraisColis)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {selectedMethod && (
+                  <div className="flex justify-between">
+                    <dt className="text-ink-600">Paiement</dt>
+                    <dd className="font-semibold text-ink-800">{mode === "livraison" ? "À la livraison" : "Carte bancaire"}</dd>
+                  </div>
+                )}
                 <div className="flex items-baseline justify-between border-t border-sand-200 pt-4">
                   <dt className="font-semibold text-ink-900">Total</dt>
                   <dd className="font-display text-3xl font-semibold text-ink-900 tabular-nums">{money(grandTotal)}</dd>
                 </div>
               </dl>
+              <p className="mt-2 text-xs text-ink-500">Aucun frais supplémentaire après cette étape.</p>
               {error && <Alert className="mt-5">{error}</Alert>}
               <Button size="lg" className="mt-6 w-full" onClick={checkout} loading={loading}>
                 {!token ? "Se connecter pour commander" : mode === "livraison" ? "Confirmer la commande" : "Valider et payer"}

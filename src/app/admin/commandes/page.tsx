@@ -6,7 +6,8 @@ import { Ban, Banknote, CreditCard, ReceiptText, RotateCcw } from "lucide-react"
 import api from "@/lib/axios";
 import type { Delivery } from "@/lib/deliveries";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Alert, apiError, Button, Card, EmptyState, formatDate, LoadingRows, money, PageHeader, SearchInput, Segmented, StatusBadge } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
+import { Alert, apiError, Button, Card, cn, EmptyState, formatDate, LoadingRows, money, PageHeader, SearchInput, Segmented, StatusBadge } from "@/components/ui";
 
 interface Order {
   id: number;
@@ -28,12 +29,24 @@ const filters = [
   { value: "annulee", label: "Annulées" },
 ];
 
+// Litige ouvert ou résolu sur une course de la commande.
+const hasDispute = (o: Order) => (o.deliveries || []).some((d) => d.probleme_signale_at);
+
+const modes = [
+  { value: "tous", label: "Tous paiements" },
+  { value: "carte", label: "Carte" },
+  { value: "livraison", label: "À la livraison" },
+  { value: "litige", label: "Avec litige" },
+] as const;
+
 export default function AdminCommandesPage() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [refunding, setRefunding] = useState<number | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [mode, setMode] = useState<"tous" | "carte" | "livraison" | "litige">("tous");
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = () =>
     api
@@ -46,7 +59,18 @@ export default function AdminCommandesPage() {
   }, []);
 
   const refund = async (order: Order) => {
-    if (!confirm(`Rembourser intégralement la commande #${order.id} (${money(order.total)}) ? Les montants déjà versés aux vendeurs seront repris.`)) return;
+    const ok = await confirm({
+      title: `Rembourser la commande #${order.id} ?`,
+      description: (
+        <>
+          Le client <strong>{order.buyer?.name || "—"}</strong> sera remboursé de <strong>{money(order.total)}</strong> sur sa carte. Les montants déjà
+          versés aux vendeurs seront repris. Cette action est définitive.
+        </>
+      ),
+      confirmLabel: "Rembourser",
+      tone: "danger",
+    });
+    if (!ok) return;
     setRefunding(order.id);
     setMessage(null);
     try {
@@ -64,7 +88,14 @@ export default function AdminCommandesPage() {
   const canCancel = (o: Order) => o.statut === "en_attente" || (o.mode_paiement === "livraison" && o.statut === "expediee");
 
   const cancel = async (order: Order) => {
-    if (!confirm(`Annuler la commande #${order.id} ? Le stock sera remis en vente.`)) return;
+    const ok = await confirm({
+      title: `Annuler la commande #${order.id} ?`,
+      description: "Les articles sont remis en stock et la commande ne pourra plus être expédiée. Cette action est définitive.",
+      confirmLabel: "Annuler la commande",
+      cancelLabel: "Retour",
+      tone: "danger",
+    });
+    if (!ok) return;
     setRefunding(order.id);
     setMessage(null);
     try {
@@ -82,18 +113,49 @@ export default function AdminCommandesPage() {
   const filtered = useMemo(
     () =>
       list.filter(
-        (o) => (filter === null || o.statut === filter) && `${o.id} ${o.buyer?.name} ${o.buyer?.email}`.toLowerCase().includes(q.toLowerCase()),
+        (o) =>
+          (filter === null || o.statut === filter) &&
+          (mode === "tous" ||
+            (mode === "litige" ? hasDispute(o) : mode === "livraison" ? o.mode_paiement === "livraison" : o.mode_paiement !== "livraison")) &&
+          `${o.id} ${o.buyer?.name} ${o.buyer?.email} ${o.items.map((i) => i.product.nom).join(" ")}`.toLowerCase().includes(q.toLowerCase()),
       ),
-    [list, filter, q],
+    [list, filter, mode, q],
   );
+  const filteredTotal = filtered.filter((o) => o.statut !== "annulee").reduce((sum, o) => sum + Number(o.total), 0);
 
   return (
     <DashboardLayout>
+      {confirmDialog}
       <PageHeader eyebrow="Administration" title="Commandes" description="Toutes les commandes de la plateforme, avec remboursement en cas de litige." />
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <Segmented options={filters.map((f) => ({ ...f, count: f.value ? list.filter((o) => o.statut === f.value).length : list.length }))} value={filter} onChange={setFilter} />
-        <SearchInput value={q} onChange={setQ} placeholder="N°, client, e-mail…" />
+        <SearchInput value={q} onChange={setQ} placeholder="N°, client, produit…" />
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {modes.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setMode(m.value)}
+              aria-pressed={mode === m.value}
+              className={cn(
+                "h-8 rounded-lg px-3 text-xs font-semibold transition",
+                mode === m.value ? "bg-terra-50 text-terra-800 ring-1 ring-terra-300" : "text-ink-600 hover:bg-sand-100",
+              )}
+            >
+              {m.label}
+              {m.value === "litige" && ` (${list.filter(hasDispute).length})`}
+            </button>
+          ))}
+        </div>
+        {orders !== null && (
+          <p className="text-sm text-ink-500">
+            {filtered.length} commande{filtered.length > 1 ? "s" : ""} · <span className="font-semibold text-ink-800 tabular-nums">{money(filteredTotal)}</span> hors annulées
+          </p>
+        )}
       </div>
 
       {message && <Alert tone={message.tone} className="mb-4">{message.text}</Alert>}

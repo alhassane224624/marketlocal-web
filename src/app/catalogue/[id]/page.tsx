@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Check, ChevronRight, Minus, PackageX, Plus, ShieldCheck, ShoppingBag, Star, Store, Truck } from "lucide-react";
+import { ArrowRight, Banknote, Check, ChevronRight, CreditCard, Minus, PackageX, Plus, ShoppingBag, Star, Store, Truck } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { fetchProduct, type Product } from "@/features/products/productSlice";
 import { addToCart } from "@/features/cart/cartSlice";
@@ -33,10 +33,18 @@ export default function ProductDetailPage() {
   const cartItems = useAppSelector((s) => s.cart.items);
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  // Conditions réelles affichées sur la fiche : frais par colis et modes de paiement actifs.
+  const [fraisColis, setFraisColis] = useState<number | null>(null);
+  const [methods, setMethods] = useState<{ code: string; disponible: boolean; montant_max?: number | null }[]>([]);
 
   useEffect(() => {
     if (id) dispatch(fetchProduct(id));
   }, [dispatch, id]);
+
+  useEffect(() => {
+    api.get("/livraison/tarif").then((r) => setFraisColis(Number(r.data.frais_par_colis) || 0)).catch(() => {});
+    api.get("/payment-methods").then((r) => setMethods(r.data || [])).catch(() => {});
+  }, []);
 
   if (status === "failed") {
     return (
@@ -74,6 +82,15 @@ export default function ProductDetailPage() {
   const canBuy = !user || user.role === "acheteur";
   const reviews = product.reviews || [];
   const rating = product.note_moyenne ?? (reviews.length ? reviews.reduce((s, r) => s + r.note, 0) / reviews.length : null);
+
+  const carte = methods.find((m) => m.code === "carte" && m.disponible);
+  const livraison = methods.find((m) => m.code === "livraison" && m.disponible);
+  const paiementTexte =
+    carte && livraison
+      ? `Carte bancaire (Stripe) ou espèces à la livraison${livraison.montant_max ? ` jusqu’à ${money(livraison.montant_max)}` : ""}`
+      : livraison
+        ? "Espèces à la livraison"
+        : "Carte bancaire, sécurisée par Stripe";
 
   const add = () => {
     for (let i = 0; i < quantity; i++)
@@ -127,9 +144,13 @@ export default function ProductDetailPage() {
                 <span className="text-ink-500">Pas encore d’avis</span>
               )}
               <span className="h-4 w-px bg-sand-300" aria-hidden />
-              <span className="flex items-center gap-1.5 text-ink-700">
-                <Store size={15} /> {product.shop?.nom || "Vendeur local"}
-              </span>
+              {product.shop ? (
+                <Link href={`/catalogue?shop=${product.shop.id}`} className="flex items-center gap-1.5 text-ink-700 hover:text-terra-700">
+                  <Store size={15} /> {product.shop.nom}
+                </Link>
+              ) : (
+                <span className="flex items-center gap-1.5 text-ink-700"><Store size={15} /> Vendeur local</span>
+              )}
             </div>
 
             <p className="mt-8 font-display text-4xl font-semibold text-ink-900 tabular-nums">{money(product.prix)}</p>
@@ -177,16 +198,46 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-              <li className="flex items-start gap-3 rounded-2xl bg-sand-100 p-4 text-sm">
-                <ShieldCheck size={18} className="mt-0.5 shrink-0 text-ink-700" />
-                <span><strong className="block text-ink-900">Paiement au choix</strong><span className="text-ink-600">Carte via Stripe ou à la livraison</span></span>
-              </li>
-              <li className="flex items-start gap-3 rounded-2xl bg-sand-100 p-4 text-sm">
+            <dl className="mt-8 divide-y divide-sand-200 rounded-2xl border border-sand-200 bg-sand-50 text-sm">
+              <div className="flex items-start gap-3 p-4">
                 <Truck size={18} className="mt-0.5 shrink-0 text-ink-700" />
-                <span><strong className="block text-ink-900">Expédié par le vendeur</strong><span className="text-ink-600">Suivi à chaque étape</span></span>
-              </li>
-            </ul>
+                <div>
+                  <dt className="font-semibold text-ink-900">Livraison</dt>
+                  <dd className="mt-0.5 text-ink-600">
+                    {fraisColis === null
+                      ? "Calculée au panier"
+                      : fraisColis > 0
+                        ? `${money(fraisColis)} par boutique (un colis par vendeur), affichés avant de payer`
+                        : "Offerte"}
+                    {" · "}préparée et expédiée par le vendeur, suivie jusqu’à la remise.
+                  </dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-4">
+                {livraison && !carte ? <Banknote size={18} className="mt-0.5 shrink-0 text-ink-700" /> : <CreditCard size={18} className="mt-0.5 shrink-0 text-ink-700" />}
+                <div>
+                  <dt className="font-semibold text-ink-900">Paiement</dt>
+                  <dd className="mt-0.5 text-ink-600">{paiementTexte}</dd>
+                </div>
+              </div>
+              {product.shop && (
+                <div className="flex items-center gap-3 p-4">
+                  {product.shop.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.shop.logo} alt="" className="h-10 w-10 shrink-0 rounded-full border border-sand-200 object-cover" />
+                  ) : (
+                    <Avatar name={product.shop.nom} size="sm" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <dt className="text-xs text-ink-500">Vendu par</dt>
+                    <dd className="truncate font-semibold text-ink-900">{product.shop.nom}</dd>
+                  </div>
+                  <Link href={`/catalogue?shop=${product.shop.id}`} className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-terra-700 hover:underline">
+                    Ses produits <ArrowRight size={14} />
+                  </Link>
+                </div>
+              )}
+            </dl>
           </div>
         </div>
 

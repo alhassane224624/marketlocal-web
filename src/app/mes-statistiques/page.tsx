@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Coins, Package, Percent, ReceiptText, Trophy, Wallet } from "lucide-react";
+import { Banknote, CheckCircle2, Clock, Coins, Package, Percent, ReceiptText, Trophy, Wallet } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
 import SalesChart, { salesByDay } from "@/components/SalesChart";
@@ -17,6 +17,7 @@ interface Stats {
   chiffre_affaires_brut_30j: number;
   chiffre_affaires_net_30j: number;
   taux_commission: number;
+  finances?: { verse: number; en_attente: number; especes: number; commission_especes: number };
 }
 
 interface ShopOrder {
@@ -72,9 +73,53 @@ export default function MesStatistiquesPage() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Ventes nettes (total)" value={money(s?.chiffre_affaires_net)} icon={Wallet} tone="terra" hint={s ? `${money(s.chiffre_affaires_brut)} brut` : undefined} />
         <StatCard label="Ventes nettes (30 j)" value={money(s?.chiffre_affaires_net_30j)} icon={Coins} tone="olive" hint={s ? `${money(s.chiffre_affaires_brut_30j)} brut` : undefined} />
-        <StatCard label="Commission versée" value={money(commission)} icon={Percent} tone="ink" hint={s ? `Taux actuel ${s.taux_commission} %` : undefined} />
+        <StatCard label="Commission plateforme" value={money(commission)} icon={Percent} tone="ink" hint={s ? `Taux actuel ${s.taux_commission} %` : undefined} />
         <StatCard label="Commandes" value={s?.total_commandes ?? "—"} icon={ReceiptText} tone="sky" hint={s ? `${s.commandes_en_cours} en cours` : undefined} />
       </div>
+
+      {s && (
+        <Card className="mt-8">
+          <CardHeader title="Votre argent" icon={Wallet} description="Du montant payé par vos clients à ce que vous recevez." />
+          <div className="grid gap-6 p-5 lg:grid-cols-[1fr_1.2fr]">
+            {/* Du brut au net */}
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-600">Ventes encaissées (brut)</dt>
+                <dd className="font-semibold tabular-nums text-ink-900">{money(s.chiffre_affaires_brut)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-600">Commission de la plateforme</dt>
+                <dd className="font-semibold tabular-nums text-red-700">− {money(commission)}</dd>
+              </div>
+              <div className="flex justify-between gap-3 border-t border-sand-200 pt-3">
+                <dt className="font-semibold text-ink-900">Votre part (net)</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums text-ink-900">{money(s.chiffre_affaires_net)}</dd>
+              </div>
+            </dl>
+            {/* Où se trouve le net */}
+            <ul className="grid gap-3 sm:grid-cols-3">
+              {[
+                { icon: CheckCircle2, label: "Déjà versé", value: s.finances?.verse, text: "Virements Stripe effectués", tone: "bg-olive-50 text-olive-700" },
+                { icon: Clock, label: "À venir", value: s.finances?.en_attente, text: "Virements Stripe en attente", tone: "bg-sky-50 text-sky-700" },
+                {
+                  icon: Banknote,
+                  label: "Encaissé en espèces",
+                  value: s.finances?.especes,
+                  text: s.finances?.commission_especes ? `Paiement à la livraison · commission due : ${money(s.finances.commission_especes)}` : "Paiement à la livraison",
+                  tone: "bg-saffron-50 text-saffron-700",
+                },
+              ].map(({ icon: Icon, label, value, text, tone }) => (
+                <li key={label} className="rounded-xl border border-sand-200 p-4">
+                  <span className={`grid h-8 w-8 place-items-center rounded-full ${tone}`}><Icon size={16} /></span>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-500">{label}</p>
+                  <p className="mt-1 font-display text-xl font-semibold tabular-nums text-ink-900">{money(value)}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500">{text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
 
       <Card className="mt-8">
         <CardHeader title="Ventes payées par jour" description="30 derniers jours, montant brut" />
