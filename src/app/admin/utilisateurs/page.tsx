@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Ban, Pencil, RotateCcw, UserPlus, Users, X } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
-import { Alert, apiError, Avatar, Badge, Button, Card, EmptyState, Field, formatDate, Input, LoadingRows, PageHeader, SearchInput, Segmented, Select } from "@/components/ui";
+import { Alert, apiError, Avatar, Badge, Button, Card, EmptyState, Field, formatDate, Input, LoadingRows, PageHeader, Pagination, SearchInput, Segmented, Select } from "@/components/ui";
 
 interface UserAdmin {
   id: number;
@@ -37,11 +37,22 @@ const roleBadge = {
   livreur: { label: "Livreur", tone: "sky" as const },
 };
 
+interface UsersPage {
+  key: string;
+  users: UserAdmin[];
+  meta: { page: number; last_page: number; total: number };
+  counts: Record<string, number>;
+}
+
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserAdmin[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  // Recherche envoyée à l'API (après 300 ms sans frappe).
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Résultat rattaché à la requête qui l'a produit : tant qu'il ne correspond pas, on affiche le chargement.
+  const [result, setResult] = useState<UsersPage | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [ask, promptDialog] = usePrompt();
@@ -82,8 +93,9 @@ export default function AdminUsersPage() {
         const r = await api.put(`/admin/users/${editing.id}`, form);
         replace(r.data);
       } else {
-        const r = await api.post("/admin/users", form);
-        setUsers((list) => [r.data, ...list]);
+        await api.post("/admin/users", form);
+        // Nouveau compte : on recharge la liste (tri, filtres et compteurs viennent de l'API).
+        setReloadKey((k) => k + 1);
       }
       closeForm();
     } catch (err) {
@@ -93,7 +105,8 @@ export default function AdminUsersPage() {
     }
   };
 
-  const replace = (user: UserAdmin) => setUsers((list) => list.map((u) => (u.id === user.id ? { ...u, ...user } : u)));
+  const replace = (user: UserAdmin) =>
+    setResult((prev) => prev && { ...prev, users: prev.users.map((u) => (u.id === user.id ? { ...u, ...user } : u)) });
 
   const suspend = async (user: UserAdmin) => {
     const motif = await ask({
@@ -141,25 +154,36 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(q.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const requestKey = `${filter}|${search}|${page}|${reloadKey}`;
+
+  useEffect(() => {
     api
-      .get("/admin/users")
-      .then((r) => setUsers(r.data))
-      .catch(() => setUsers([]))
-      .finally(() => setLoading(false));
-  }, []);
+      .get("/admin/users", { params: { role: filter ?? undefined, q: search || undefined, page } })
+      .then((r) => setResult({ key: requestKey, users: r.data.data, meta: r.data.meta, counts: r.data.counts }))
+      .catch((err) => {
+        setError(apiError(err, "Impossible de charger les utilisateurs."));
+        setResult((prev) => (prev ? { ...prev, key: requestKey } : { key: requestKey, users: [], meta: { page: 1, last_page: 1, total: 0 }, counts: {} }));
+      });
+    // requestKey résume filter, search, page et reloadKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
 
-  const filtered = useMemo(
-    () =>
-      users.filter(
-        (u) =>
-          (filter === null || (filter === "suspendu" ? Boolean(u.suspendu_at) : u.role === filter)) &&
-          `${u.name} ${u.email} ${u.ville || ""} ${u.shop?.nom || ""}`.toLowerCase().includes(q.toLowerCase()),
-      ),
-    [users, filter, q],
-  );
+  const loading = result?.key !== requestKey;
+  const users = result?.users ?? [];
+  const meta = result?.meta;
+  const count = (key: string) => result?.counts[key] ?? 0;
 
-  const count = (role: string | null) =>
-    role === "suspendu" ? users.filter((u) => u.suspendu_at).length : role ? users.filter((u) => u.role === role).length : users.length;
+  const changeFilter = (value: string | null) => {
+    setFilter(value);
+    setPage(1);
+  };
 
   return (
     <DashboardLayout>
@@ -220,7 +244,7 @@ export default function AdminUsersPage() {
       <div className="mb-6 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <Segmented
           options={[
-            { value: null, label: "Tous", count: count(null) },
+            { value: null, label: "Tous", count: count("tous") },
             { value: "acheteur", label: "Acheteurs", count: count("acheteur") },
             { value: "vendeur", label: "Vendeurs", count: count("vendeur") },
             { value: "livreur", label: "Livreurs", count: count("livreur") },
@@ -228,7 +252,7 @@ export default function AdminUsersPage() {
             ...(count("suspendu") > 0 ? [{ value: "suspendu", label: "Suspendus", count: count("suspendu") }] : []),
           ]}
           value={filter}
-          onChange={setFilter}
+          onChange={changeFilter}
         />
         <SearchInput value={q} onChange={setQ} placeholder="Nom, e-mail, ville, boutique…" />
       </div>
@@ -237,7 +261,7 @@ export default function AdminUsersPage() {
 
       {loading ? (
         <LoadingRows rows={4} />
-      ) : filtered.length === 0 ? (
+      ) : users.length === 0 ? (
         <EmptyState icon={Users} title="Aucun utilisateur" description="Aucun compte ne correspond à cette recherche." />
       ) : (
         <Card>
@@ -255,7 +279,7 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand-100">
-                {filtered.map((u) => (
+                {users.map((u) => (
                   <tr key={u.id} className={`transition hover:bg-sand-50 ${u.suspendu_at ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -316,6 +340,10 @@ export default function AdminUsersPage() {
             </table>
           </div>
         </Card>
+      )}
+
+      {meta && meta.last_page > 1 && (
+        <Pagination page={meta.page} lastPage={meta.last_page} total={meta.total} onChange={setPage} />
       )}
     </DashboardLayout>
   );

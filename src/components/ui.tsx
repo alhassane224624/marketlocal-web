@@ -4,6 +4,8 @@ import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Info,
   Loader2,
   Search,
@@ -457,5 +459,34 @@ export function SearchInput({ value, onChange, placeholder }: { value: string; o
         className="h-10 w-full rounded-xl border border-sand-300 bg-white pl-9 pr-3 text-sm placeholder:text-ink-400 focus:border-terra-400 focus:outline-none focus:ring-4 focus:ring-terra-100"
       />
     </label>
+  );
+}
+
+/** Pagination simple : précédent / suivant, avec la position. */
+export function Pagination({
+  page,
+  lastPage,
+  total,
+  onChange,
+}: {
+  page: number;
+  lastPage: number;
+  total: number;
+  onChange: (page: number) => void;
+}) {
+  return (
+    <nav className="mt-4 flex items-center justify-between gap-3 text-sm text-ink-600" aria-label="Pagination">
+      <span>
+        Page {page} sur {lastPage} · {total} résultat{total > 1 ? "s" : ""}
+      </span>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onChange(page - 1)}>
+          <ChevronLeft size={14} /> Précédent
+        </Button>
+        <Button size="sm" variant="outline" disabled={page >= lastPage} onClick={() => onChange(page + 1)}>
+          Suivant <ChevronRight size={14} />
+        </Button>
+      </div>
+    </nav>
   );
 }

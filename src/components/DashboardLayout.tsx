@@ -10,6 +10,7 @@ import {
   MapPinned,
   ExternalLink,
   FolderTree,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -93,6 +94,7 @@ const navByRole: Record<string, { title: string; items: NavItem[] }[]> = {
         { label: "Utilisateurs", href: "/admin/utilisateurs", icon: Users },
         { label: "Livreurs", href: "/admin/livreurs", icon: Bike },
         { label: "Catégories", href: "/admin/categories", icon: FolderTree },
+        { label: "Journal", href: "/admin/journal", icon: History },
       ],
     },
     {
