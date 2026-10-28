@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Ban, RotateCcw, UserPlus, Users, X } from "lucide-react";
+import { Ban, Pencil, RotateCcw, UserPlus, Users, X } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
@@ -47,26 +47,49 @@ export default function AdminUsersPage() {
   const [ask, promptDialog] = usePrompt();
   const [confirm, confirmDialog] = useConfirm();
   const [showForm, setShowForm] = useState(false);
+  // null : création ; sinon, compte en cours de modification.
+  const [editing, setEditing] = useState<UserAdmin | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const setField = (key: keyof typeof emptyForm) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const create = async (e: FormEvent) => {
+  const openForm = (user: UserAdmin | null) => {
+    setEditing(user);
+    setForm(
+      user
+        ? { name: user.name, email: user.email, password: "", role: user.role, telephone: user.telephone || "", ville: user.ville || "" }
+        : emptyForm,
+    );
+    setFormError("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+  };
+
+  const save = async (e: FormEvent) => {
     e.preventDefault();
-    setCreating(true);
+    setSaving(true);
     setFormError("");
     try {
-      const r = await api.post("/admin/users", form);
-      setUsers((list) => [r.data, ...list]);
-      setForm(emptyForm);
-      setShowForm(false);
+      if (editing) {
+        const r = await api.put(`/admin/users/${editing.id}`, form);
+        replace(r.data);
+      } else {
+        const r = await api.post("/admin/users", form);
+        setUsers((list) => [r.data, ...list]);
+      }
+      closeForm();
     } catch (err) {
-      setFormError(apiError(err, "Impossible de créer ce compte."));
+      setFormError(apiError(err, editing ? "Impossible de modifier ce compte." : "Impossible de créer ce compte."));
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
@@ -147,7 +170,7 @@ export default function AdminUsersPage() {
         title="Utilisateurs"
         description="Les comptes acheteurs, vendeurs, livreurs et administrateurs."
         actions={
-          <Button onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "primary"}>
+          <Button onClick={() => (showForm ? closeForm() : openForm(null))} variant={showForm ? "outline" : "primary"}>
             {showForm ? <><X size={15} /> Fermer</> : <><UserPlus size={15} /> Nouvel utilisateur</>}
           </Button>
         }
@@ -155,15 +178,19 @@ export default function AdminUsersPage() {
 
       {showForm && (
         <Card className="mb-6 p-5">
-          <form onSubmit={create} className="grid gap-4 sm:grid-cols-2">
+          <h2 className="mb-4 font-semibold text-ink-900">{editing ? `Modifier ${editing.name}` : "Nouvel utilisateur"}</h2>
+          <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
             <Field label="Nom complet">
               <Input required value={form.name} onChange={setField("name")} />
             </Field>
             <Field label="E-mail">
               <Input required type="email" value={form.email} onChange={setField("email")} />
             </Field>
-            <Field label="Mot de passe" hint="8 caractères minimum, à communiquer à l’utilisateur.">
-              <Input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={setField("password")} />
+            <Field
+              label={editing ? "Nouveau mot de passe" : "Mot de passe"}
+              hint={editing ? "Laisser vide pour ne pas le changer. Sinon, l’utilisateur sera déconnecté." : "8 caractères minimum, à communiquer à l’utilisateur."}
+            >
+              <Input required={!editing} type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={setField("password")} />
             </Field>
             <Field label="Rôle">
               <Select value={form.role} onChange={setField("role")}>
@@ -180,10 +207,11 @@ export default function AdminUsersPage() {
               <Input value={form.ville} onChange={setField("ville")} />
             </Field>
             {formError && <Alert className="sm:col-span-2">{formError}</Alert>}
-            <div className="sm:col-span-2">
-              <Button type="submit" loading={creating}>
-                <UserPlus size={15} /> Créer le compte
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" loading={saving}>
+                {editing ? <><Pencil size={15} /> Enregistrer</> : <><UserPlus size={15} /> Créer le compte</>}
               </Button>
+              <Button type="button" variant="ghost" onClick={closeForm}>Annuler</Button>
             </div>
           </form>
         </Card>
@@ -267,7 +295,10 @@ export default function AdminUsersPage() {
                         <Badge tone="olive">Actif</Badge>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="space-x-2 whitespace-nowrap px-5 py-3 text-right">
+                      <Button size="sm" variant="outline" onClick={() => openForm(u)}>
+                        <Pencil size={13} /> Modifier
+                      </Button>
                       {u.role !== "admin" &&
                         (u.suspendu_at ? (
                           <Button size="sm" variant="outline" onClick={() => reactivate(u)} loading={busyId === u.id}>
