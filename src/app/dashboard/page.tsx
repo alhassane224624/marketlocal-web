@@ -25,7 +25,7 @@ import { fetchMyShop } from "@/features/shop/shopSlice";
 import { fetchAllShops, fetchStats, validateShop } from "@/features/admin/adminSlice";
 import api from "@/lib/axios";
 import { deliveryLabel, isActiveDelivery, type Delivery } from "@/lib/deliveries";
-import { itemsTotal, readyToShip, shopStatut } from "@/lib/orders";
+import { itemsTotal, readyToShip } from "@/lib/orders";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useConfirm } from "@/components/ConfirmDialog";
 import SalesChart, { salesByDay } from "@/components/SalesChart";

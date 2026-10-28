@@ -36,6 +36,9 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
 
       if (!window.location.pathname.startsWith("/login")) {
+        // Intercepteur hors de React : pas de useRouter ici. Le rechargement complet
+        // vide aussi le store Redux de l'ancienne session.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = "/login";
       }
     }
