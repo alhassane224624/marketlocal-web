@@ -80,9 +80,14 @@ export default function LoginPage() {
         <Field label="Adresse e-mail">
           <Input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.ma" />
         </Field>
-        <Field label="Mot de passe">
-          <Input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-        </Field>
+        <div>
+          <Field label="Mot de passe">
+            <Input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+          </Field>
+          <Link href="/mot-de-passe-oublie" className="mt-1.5 inline-block text-xs font-semibold text-terra-700 hover:underline">
+            Mot de passe oublié ?
+          </Link>
+        </div>
         {status === "failed" && error && <Alert>{error}</Alert>}
         <Button type="submit" size="lg" className="w-full" loading={status === "loading"}>
           Se connecter {status !== "loading" && <ArrowRight size={18} />}
