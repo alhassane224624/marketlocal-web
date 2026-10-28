@@ -198,7 +198,7 @@ export function PublicHeader() {
     router.push(query.trim() ? `/catalogue?q=${encodeURIComponent(query.trim())}` : "/catalogue");
   };
 
-  const showCart = !user || user.role === "acheteur";
+  const showCart = !user || user.role === "acheteur" || user.role === "admin";
 
   return (
     <header className="sticky top-0 z-40 border-b border-sand-200/80 bg-sand-50/90 backdrop-blur-md">

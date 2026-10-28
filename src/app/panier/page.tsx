@@ -125,8 +125,8 @@ export default function PanierPage() {
       router.push("/login?redirect=/panier");
       return;
     }
-    if (user && user.role !== "acheteur") {
-      setError("Seul un compte acheteur peut passer commande.");
+    if (user && user.role !== "acheteur" && user.role !== "admin") {
+      setError("Seul un compte acheteur ou administrateur peut passer commande.");
       return;
     }
     if (!addressId && addresses.length === 0 && !form.adresse) {
@@ -261,7 +261,7 @@ export default function PanierPage() {
               ))}
             </div>
 
-            {token && user?.role === "acheteur" && (
+            {token && (user?.role === "acheteur" || user?.role === "admin") && (
               <section>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink-900">

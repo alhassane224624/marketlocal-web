@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Ban, RotateCcw, Users } from "lucide-react";
+import { Ban, RotateCcw, UserPlus, Users, X } from "lucide-react";
 import api from "@/lib/axios";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
-import { Alert, apiError, Avatar, Badge, Button, Card, EmptyState, formatDate, LoadingRows, PageHeader, SearchInput, Segmented } from "@/components/ui";
+import { Alert, apiError, Avatar, Badge, Button, Card, EmptyState, Field, formatDate, Input, LoadingRows, PageHeader, SearchInput, Segmented, Select } from "@/components/ui";
 
 interface UserAdmin {
   id: number;
@@ -28,6 +28,8 @@ const shopStatus: Record<string, { label: string; tone: "olive" | "saffron" | "r
   refuse: { label: "refusée", tone: "red" },
 };
 
+const emptyForm = { name: "", email: "", password: "", role: "acheteur", telephone: "", ville: "" };
+
 const roleBadge = {
   acheteur: { label: "Acheteur", tone: "saffron" as const },
   vendeur: { label: "Vendeur", tone: "terra" as const },
@@ -44,6 +46,29 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("");
   const [ask, promptDialog] = usePrompt();
   const [confirm, confirmDialog] = useConfirm();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const setField = (key: keyof typeof emptyForm) => (e: { target: { value: string } }) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    setFormError("");
+    try {
+      const r = await api.post("/admin/users", form);
+      setUsers((list) => [r.data, ...list]);
+      setForm(emptyForm);
+      setShowForm(false);
+    } catch (err) {
+      setFormError(apiError(err, "Impossible de créer ce compte."));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const replace = (user: UserAdmin) => setUsers((list) => list.map((u) => (u.id === user.id ? { ...u, ...user } : u)));
 
@@ -117,7 +142,52 @@ export default function AdminUsersPage() {
     <DashboardLayout>
       {promptDialog}
       {confirmDialog}
-      <PageHeader eyebrow="Administration" title="Utilisateurs" description="Les comptes acheteurs, vendeurs, livreurs et administrateurs." />
+      <PageHeader
+        eyebrow="Administration"
+        title="Utilisateurs"
+        description="Les comptes acheteurs, vendeurs, livreurs et administrateurs."
+        actions={
+          <Button onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "primary"}>
+            {showForm ? <><X size={15} /> Fermer</> : <><UserPlus size={15} /> Nouvel utilisateur</>}
+          </Button>
+        }
+      />
+
+      {showForm && (
+        <Card className="mb-6 p-5">
+          <form onSubmit={create} className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nom complet">
+              <Input required value={form.name} onChange={setField("name")} />
+            </Field>
+            <Field label="E-mail">
+              <Input required type="email" value={form.email} onChange={setField("email")} />
+            </Field>
+            <Field label="Mot de passe" hint="8 caractères minimum, à communiquer à l’utilisateur.">
+              <Input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={setField("password")} />
+            </Field>
+            <Field label="Rôle">
+              <Select value={form.role} onChange={setField("role")}>
+                <option value="acheteur">Acheteur</option>
+                <option value="vendeur">Vendeur</option>
+                <option value="livreur">Livreur</option>
+                <option value="admin">Administrateur</option>
+              </Select>
+            </Field>
+            <Field label={form.role === "livreur" ? "Téléphone (obligatoire)" : "Téléphone"}>
+              <Input required={form.role === "livreur"} value={form.telephone} onChange={setField("telephone")} />
+            </Field>
+            <Field label="Ville">
+              <Input value={form.ville} onChange={setField("ville")} />
+            </Field>
+            {formError && <Alert className="sm:col-span-2">{formError}</Alert>}
+            <div className="sm:col-span-2">
+              <Button type="submit" loading={creating}>
+                <UserPlus size={15} /> Créer le compte
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <div className="mb-6 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <Segmented

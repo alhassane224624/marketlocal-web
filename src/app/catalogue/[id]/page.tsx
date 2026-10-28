@@ -79,7 +79,7 @@ export default function ProductDetailPage() {
 
   const inCart = cartItems.find((i) => i.product_id === product.id);
   const remaining = product.stock - (inCart?.quantite ?? 0);
-  const canBuy = !user || user.role === "acheteur";
+  const canBuy = !user || user.role === "acheteur" || user.role === "admin";
   const reviews = product.reviews || [];
   const rating = product.note_moyenne ?? (reviews.length ? reviews.reduce((s, r) => s + r.note, 0) / reviews.length : null);
 
@@ -241,7 +241,7 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        <Reviews product={product} onAdded={() => dispatch(fetchProduct(id))} canReview={user?.role === "acheteur"} />
+        <Reviews product={product} onAdded={() => dispatch(fetchProduct(id))} canReview={user?.role === "acheteur" || user?.role === "admin"} />
       </div>
     </SiteShell>
   );

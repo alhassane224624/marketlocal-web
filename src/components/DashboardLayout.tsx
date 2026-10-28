@@ -95,6 +95,14 @@ const navByRole: Record<string, { title: string; items: NavItem[] }[]> = {
         { label: "Catégories", href: "/admin/categories", icon: FolderTree },
       ],
     },
+    {
+      title: "Mes achats",
+      items: [
+        { label: "Mes commandes", href: "/mes-commandes", icon: ReceiptText },
+        { label: "Mon panier", href: "/panier", icon: ShoppingBag },
+        { label: "Profil & adresses", href: "/profil", icon: UserRound },
+      ],
+    },
   ],
 };
 
@@ -112,7 +120,7 @@ const startsWith = (pathname: string, paths: string[]) =>
 function canAccess(pathname: string, role: string): boolean {
   if (startsWith(pathname, ["/admin"])) return role === "admin";
   if (startsWith(pathname, ["/ma-boutique", "/mes-produits", "/mes-commandes-vendeur", "/mes-avis-recus", "/mes-statistiques", "/shop/create"])) return role === "vendeur";
-  if (startsWith(pathname, ["/panier", "/paiement", "/mes-commandes"])) return role === "acheteur";
+  if (startsWith(pathname, ["/panier", "/paiement", "/mes-commandes"])) return role === "acheteur" || role === "admin";
   if (startsWith(pathname, ["/livraisons", "/mes-livraisons"])) return role === "livreur";
   return true;
 }
